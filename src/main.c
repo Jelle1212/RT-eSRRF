@@ -70,81 +70,116 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
         return;
     }
 
-    // Set the directory to the first image in the TIFF file (page 0)
-    if (TIFFSetDirectory(tif, 0) != 1) {
-        fprintf(stderr, "Error: Could not set to the first directory (image)\n");
-        TIFFClose(tif);
-        return;
-    }
+    // Determine the number of frames (directories) in the TIFF
+    int nFrames = 0;
+    do {
+        nFrames++;
+    } while (TIFFReadDirectory(tif));  // Moves to the next frame
+
+    // Reset to the first frame
+    TIFFSetDirectory(tif, 0);
 
     uint32_t width, height;
     size_t npixels;
-    uint16_t *raster;  // Use uint16_t to handle 16-bit images
+    uint16_t *raster;
 
-    // Get image dimensions
+    // Get image dimensions from the first frame
     TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
     TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
     npixels = width * height;
 
-    // Allocate memory for pixel data (16-bit)
-    raster = (uint16_t *)_TIFFmalloc(npixels * sizeof(uint16_t));
-    if (!raster) {
-        fprintf(stderr, "Error: Memory allocation failed\n");
+    // Allocate memory for all frames
+    float *image_in = (float *)malloc(nFrames * npixels * sizeof(float));
+    if (!image_in) {
+        fprintf(stderr, "Error: Memory allocation failed for all frames\n");
         TIFFClose(tif);
         return;
     }
 
-    // Read image data (loop through all scanlines)
-    for (uint32_t row = 0; row < height; row++) {
-        if (TIFFReadScanline(tif, &raster[row * width], row, 0) != 1) {
-            fprintf(stderr, "Error: Could not read scanline %d\n", row);
-            _TIFFfree(raster);
+    // Read each frame and store it in `image_in`
+    for (int frame = 0; frame < nFrames; frame++) {
+        // Allocate memory for the current frame
+        raster = (uint16_t *)_TIFFmalloc(npixels * sizeof(uint16_t));
+        if (!raster) {
+            fprintf(stderr, "Error: Memory allocation failed for frame %d\n", frame);
+            free(image_in);
+            TIFFClose(tif);
+            return;
+        }
+
+        // Read the current frame
+        for (uint32_t row = 0; row < height; row++) {
+            if (TIFFReadScanline(tif, &raster[row * width], row, 0) != 1) {
+                fprintf(stderr, "Error: Could not read scanline %d in frame %d\n", row, frame);
+                _TIFFfree(raster);
+                free(image_in);
+                TIFFClose(tif);
+                return;
+            }
+        }
+
+        // Convert 16-bit image to normalized float grayscale and store in `image_in`
+        for (size_t i = 0; i < npixels; i++) {
+            image_in[frame * npixels + i] = (float)raster[i] / 65535.0f;  // Normalize to [0,1]
+        }
+
+        // Free raster buffer
+        _TIFFfree(raster);
+
+        // Move to next frame
+        if (frame < nFrames - 1 && !TIFFReadDirectory(tif)) {
+            fprintf(stderr, "Error: Could not move to frame %d\n", frame + 1);
+            free(image_in);
             TIFFClose(tif);
             return;
         }
     }
 
-    printf("Loaded TIFF image: %dx%d\n", width, height);
-
-    // Convert the 16-bit image into a grayscale float image
-    float *image_in = (float *)malloc(width * height * sizeof(float));
-    if (!image_in) {
-        fprintf(stderr, "Error: Memory allocation failed for grayscale image\n");
-        _TIFFfree(raster);
-        TIFFClose(tif);
-        return;
-    }
-
-    // Convert the 16-bit image to grayscale (normalize it to [0, 1])
-    for (size_t i = 0; i < npixels; i++) {
-        image_in[i] = (float)raster[i] / 65535.0f;  // Normalize to [0, 1]
-    }
-
-    // Free the raster data as we no longer need it
-    _TIFFfree(raster);
-    TIFFClose(tif);
+    printf("Loaded %d frames from TIFF image (%dx%d each)\n", nFrames, width, height);
 
     // Now, use the shift_magnify function on the first image
     int rows = height;
     int cols = width;
-    int nFrames = 1;  // We are processing only the first image (frame)
+    nFrames = 5;  // We are processing only the first image (frame)
     
     // Allocate memory for the output image
     int rowsM = (int)(rows * magnification);
     int colsM = (int)(cols * magnification);
-    
-    float *output_frame = spatial(image_in, 1, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
-    
-    if (!output_frame) {
-        fprintf(stderr, "Error: spatial function returned NULL\n");
+
+    float *rgc_maps = (float *)malloc(nFrames * rowsM * colsM * sizeof(float));
+    if (!rgc_maps) {
+        fprintf(stderr, "Error: Memory allocation failed for rgc_maps\n");
+        return;
+    }
+
+    for (int frame = 0; frame < nFrames; frame++) {
+        // Offset to process one frame at a time
+        const float *input_frame = image_in + (frame * rows * cols);
+        float *output_frame = spatial(input_frame, 1, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
+        
+        if (!output_frame) {
+            fprintf(stderr, "Error: spatial function returned NULL\n");
+            free(rgc_maps);
+            return;
+        }
+
+        // Copy processed frame into rgc_maps
+        memcpy(rgc_maps + (frame * rowsM * colsM), output_frame, rowsM * colsM * sizeof(float));
+
+        // Free the returned frame buffer
         free(output_frame);
+    }
+    
+    if (!rgc_maps) {
+        fprintf(stderr, "Error: spatial function returned NULL\n");
+        free(rgc_maps);
         return;
     }
 
     // Save the image (we're saving the original image for testing)
-    save_tiff(output_filename, output_frame, colsM, rowsM, nFrames);
+    save_tiff(output_filename, rgc_maps, colsM, rowsM, nFrames);
     // Free the allocated memory
-    free(output_frame);
+    free(rgc_maps);
 }
 
 

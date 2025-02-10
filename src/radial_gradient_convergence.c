@@ -76,7 +76,9 @@ float calculate_rgc(int xM, int yM, const float* imIntGx, const float* imIntGy, 
     return RGC;
 }
 
-void radial_gradient_convergence(const float *gradient_col_interp, const float *gradient_row_interp, const float *image_interp, int nFrames, int rowsM, int colsM, int magnification, float radius, float sensitivity, int doIntensityWeighting, float *rgc_map) {
+void radial_gradient_convergence(const float *gradient_col_interp, const float *gradient_row_interp, const float *image_interp, 
+                                  int rowsM, int colsM, int magnification, float radius, float sensitivity, 
+                                  int doIntensityWeighting, float *rgc_map) {
     float sigma = radius / 2.355;
     float fwhm = radius;
     float tSS = 2 * sigma * sigma;
@@ -87,20 +89,18 @@ void radial_gradient_convergence(const float *gradient_col_interp, const float *
     float _sensitivity = sensitivity;
     int _doIntensityWeighting = doIntensityWeighting;
 
-    int f, rM, cM;
+    int rM, cM;
 
-    // Loop over frames, rows, and columns
-    for (f = 0; f < nFrames; f++) {
-        for (rM = _magnification * 2; rM < rowsM - _magnification * 2; rM++) {
-            for (cM = _magnification * 2; cM < colsM - _magnification * 2; cM++) {
-                // If intensity weighting is enabled
-                if (_doIntensityWeighting) {
-                    float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
-                    rgc_map[f * rowsM * colsM + rM * colsM + cM] = rgc_value * image_interp[f * rowsM * colsM + rM * colsM + cM];
-                } else {
-                    float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
-                    rgc_map[f * rowsM * colsM + rM * colsM + cM] = rgc_value;
-                }
+    // Loop over rows and columns (no need for the frame loop anymore)
+    for (rM = _magnification * 2; rM < rowsM - _magnification * 2; rM++) {
+        for (cM = _magnification * 2; cM < colsM - _magnification * 2; cM++) {
+            // If intensity weighting is enabled
+            if (_doIntensityWeighting) {
+                float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
+                rgc_map[rM * colsM + cM] = rgc_value * image_interp[rM * colsM + cM];
+            } else {
+                float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
+                rgc_map[rM * colsM + cM] = rgc_value;
             }
         }
     }

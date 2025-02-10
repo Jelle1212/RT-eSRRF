@@ -1,10 +1,8 @@
 #include "roberts_cross_gradients.h"
 
 void roberts_cross_gradients(const float *image, float *gradient_col, float *gradient_row, 
-                              int nFrames, int rows, int cols) {
-    for (int n = 0; n < nFrames; n++) {
-        gradient(&image[n * rows * cols], &gradient_col[n * rows * cols], &gradient_row[n * rows * cols], rows, cols);
-    }
+                              int rows, int cols) {
+    gradient(image, gradient_col, gradient_row, rows, cols);
 }
 
 void gradient(const float* image, float* imGc, float* imGr, int rows, int cols) {

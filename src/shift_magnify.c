@@ -50,24 +50,23 @@ float interpolate(const float *image, float r, float c, int rows, int cols) {
 }
 
 void shift_magnify(const float *image_in, float *image_out, 
-                   int nFrames, int rows, int cols, 
+                   int rows, int cols, 
                    float shift_row, float shift_col, 
                    float magnification_row, float magnification_col) {
     
     int rowsM = (int)(rows * magnification_row);
     int colsM = (int)(cols * magnification_col);
 
-    int f, i, j;
+    int i, j;
     float row, col;
 
-    for (f = 0; f < nFrames; f++) {
-        for (j = 0; j < colsM; j++) {
-            col = j / magnification_col - shift_col;
-            for (i = 0; i < rowsM; i++) {
-                row = i / magnification_row - shift_row;
-                image_out[f * rowsM * colsM + i * colsM + j] = 
-                    interpolate(&image_in[f * rows * cols], row, col, rows, cols);
-            }
+    // Single frame, so we remove the outer f loop
+    for (j = 0; j < colsM; j++) {
+        col = j / magnification_col - shift_col;
+        for (i = 0; i < rowsM; i++) {
+            row = i / magnification_row - shift_row;
+            // Adjust indexing for image_in (no longer need to consider the f dimension)
+            image_out[i * colsM + j] = interpolate(&image_in[0], row, col, rows, cols);  // Process a single frame
         }
     }
 }

@@ -4,7 +4,7 @@
 double cubic(double v);
 float interpolate(const float *image, float r, float c, int rows, int cols);
 void shift_magnify(const float *image_in, float *image_out, 
-                   int nFrames, int rows, int cols, 
+                   int rows, int cols, 
                    float shift_row, float shift_col, 
                    float magnification_row, float magnification_col);
 #endif

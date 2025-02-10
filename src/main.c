@@ -155,7 +155,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     for (int frame = 0; frame < nFrames; frame++) {
         // Offset to process one frame at a time
         const float *input_frame = image_in + (frame * rows * cols);
-        float *output_frame = spatial(input_frame, 1, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
+        float *output_frame = spatial(input_frame, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
         
         if (!output_frame) {
             fprintf(stderr, "Error: spatial function returned NULL\n");

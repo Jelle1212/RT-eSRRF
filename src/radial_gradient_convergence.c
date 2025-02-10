@@ -76,7 +76,7 @@ float calculate_rgc(int xM, int yM, const float* imIntGx, const float* imIntGy, 
     return RGC;
 }
 
-void radial_gradient_convergence(float *gradient_col_interp, float *gradient_row_interp, float *image_interp, int nFrames, int rowsM, int colsM, int magnification, float radius, float sensitivity, int doIntensityWeighting, float *rgc_map) {
+void radial_gradient_convergence(const float *gradient_col_interp, const float *gradient_row_interp, const float *image_interp, int nFrames, int rowsM, int colsM, int magnification, float radius, float sensitivity, int doIntensityWeighting, float *rgc_map) {
     float sigma = radius / 2.355;
     float fwhm = radius;
     float tSS = 2 * sigma * sigma;

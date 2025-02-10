@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <tiffio.h>
+#include <string.h>
 
 void print_gradients(float *gradient, int rowsM, int colsM) {
     for (int i = 0; i < rowsM; i++) {
@@ -18,21 +19,13 @@ void print_gradients(float *gradient, int rowsM, int colsM) {
     }
 }
 
-void save_tiff(const char *filename, const float *image, uint32_t width, uint32_t height) {
+void save_tiff(const char *filename, const float *image, uint32_t width, uint32_t height, int nFrames) {
     TIFF *out = TIFFOpen(filename, "w");
     if (!out) {
         fprintf(stderr, "Error: Could not open output TIFF file %s\n", filename);
         return;
     }
 
-    // Set TIFF tags
-    TIFFSetField(out, TIFFTAG_IMAGEWIDTH, width);
-    TIFFSetField(out, TIFFTAG_IMAGELENGTH, height);
-    TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 16);  // Set 16 bits per sample for 16-bit images
-    TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, 1); // Grayscale image (1 channel)
-    TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, width));
-
-    // Allocate buffer for row data (16-bit per pixel)
     uint16_t *row_buffer = (uint16_t *)malloc(width * sizeof(uint16_t));
     if (!row_buffer) {
         fprintf(stderr, "Error: Memory allocation failed for row buffer\n");
@@ -40,21 +33,32 @@ void save_tiff(const char *filename, const float *image, uint32_t width, uint32_
         return;
     }
 
-    // Write image data (assuming the image is grayscale and normalized between [0, 1])
-    for (uint32_t row = 0; row < height; row++) {
-        for (uint32_t col = 0; col < width; col++) {
-            // Convert float (0.0-1.0) to uint16_t (0-65535)
-            row_buffer[col] = (uint16_t)(image[row * width + col] * 65535); // Assuming the values are normalized
+    for (int frame = 0; frame < nFrames; frame++) {
+        TIFFSetField(out, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(out, TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, width));
+        TIFFSetField(out, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
+        TIFFSetField(out, TIFFTAG_PAGENUMBER, frame, nFrames); // Page index
+
+        // Write image data for this frame
+        const float *frame_data = image + (frame * width * height); // Offset for each frame
+        for (uint32_t row = 0; row < height; row++) {
+            for (uint32_t col = 0; col < width; col++) {
+                row_buffer[col] = (uint16_t)(frame_data[row * width + col] * 65535);
+            }
+            TIFFWriteScanline(out, row_buffer, row, 0);
         }
-        // Write the row to the TIFF file
-        TIFFWriteScanline(out, row_buffer, row, 0);
+
+        TIFFWriteDirectory(out); // Move to the next image (multi-frame TIFF)
     }
 
-    // Free resources
     free(row_buffer);
     TIFFClose(out);
-    printf("Saved magnified image to %s\n", filename);
+    printf("Saved %d-frame TIFF to %s\n", nFrames, filename);
 }
+
 
 void load_tiff_and_process(const char *input_filename, const char *output_filename, 
                            float shift, float magnification, float radius,
@@ -128,26 +132,19 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     // Allocate memory for the output image
     int rowsM = (int)(rows * magnification);
     int colsM = (int)(cols * magnification);
-    float *magnified_image = (float *)malloc(nFrames * rowsM * colsM * sizeof(float));
+    
+    float *output_frame = spatial(image_in, 1, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
+    
+    if (!output_frame) {
+        fprintf(stderr, "Error: spatial function returned NULL\n");
+        free(output_frame);
+        return;
+    }
 
-    float *gradient_col = (float *)malloc(nFrames * rows * cols * sizeof(float));
-    float *gradient_row = (float *)malloc(nFrames * rows * cols * sizeof(float));
-
-    float *gradient_col_interp = (float *)malloc(nFrames * 2 * rowsM * 2 * colsM * sizeof(float));
-    float *gradient_row_interp = (float *)malloc(nFrames * 2 * rowsM * 2 * colsM * sizeof(float));
-
-    float *rgc_map = (float *)malloc(nFrames * rowsM * colsM * sizeof(float));
-    // Call the shift_magnify function to apply shift and magnification
-    shift_magnify(image_in, magnified_image, nFrames, rows, cols, shift, shift, magnification, magnification);
-    roberts_cross_gradients(image_in, gradient_col, gradient_row, nFrames, rows, cols);
-    shift_magnify(gradient_col, gradient_col_interp, nFrames, rows, cols, shift, shift, magnification * 2, magnification * 2);
-    shift_magnify(gradient_row, gradient_row_interp, nFrames, rows, cols, shift, shift, magnification * 2, magnification * 2);
-    radial_gradient_convergence(gradient_col_interp, gradient_row_interp, magnified_image, nFrames, rowsM, colsM, magnification, radius, sensitivity, doIntensityWeighting, rgc_map);
     // Save the image (we're saving the original image for testing)
-    save_tiff(output_filename, rgc_map, colsM, rowsM);
-
+    save_tiff(output_filename, output_frame, colsM, rowsM, nFrames);
     // Free the allocated memory
-    free(rgc_map);
+    free(output_frame);
 }
 
 

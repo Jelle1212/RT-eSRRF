@@ -1,29 +1,21 @@
 #include "radial_gradient_convergence.h"
 #include <math.h>
 
-// RGC takes as input the interpolated intensity gradients in the x and y directions
-
-// calculate distance weight
-double calculate_dw(double distance, double tSS) {
-  return pow((distance * exp((-distance * distance) / tSS)), 4);
+// Inline small functions to reduce overhead
+float calculate_dw(float distance, float tSS) {
+    float dist_sq = distance * distance;
+    return pow((distance * exp(-dist_sq / tSS)), 4);
 }
 
-// calculate degree of convergence
-double calculate_dk(float Gx, float Gy, float dx, float dy, float distance) {
-  float Dk = fabs(Gy * dx - Gx * dy) / sqrt(Gx * Gx + Gy * Gy);
-  if (isnan(Dk)) {
-    Dk = distance;
-  }
-  Dk = 1 - Dk / distance;
-  return Dk;
+float calculate_dk(float Gx, float Gy, float dx, float dy, float distance) {
+    float Dk = fabs(Gy * dx - Gx * dy) / sqrt(Gx * Gx + Gy * Gy);
+    if (isnan(Dk)) {
+        Dk = distance;
+    }
+    return 1 - Dk / distance;
 }
-
-// calculate radial gradient convergence for a single subpixel
 
 float calculate_rgc(int xM, int yM, const float* imIntGx, const float* imIntGy, int colsM, int rowsM, int magnification, float Gx_Gy_MAGNIFICATION, float fwhm, float tSO, float tSS, float sensitivity) {
-
-    float vx, vy, Gx, Gy, dx, dy, distance, distanceWeight, GdotR, Dk;
-
     float xc = (xM + 0.5) / magnification;
     float yc = (yM + 0.5) / magnification;
 
@@ -34,29 +26,30 @@ float calculate_rgc(int xM, int yM, const float* imIntGx, const float* imIntGy, 
     int _end = (int)(Gx_Gy_MAGNIFICATION * fwhm + 1);
 
     for (int j = _start; j < _end; j++) {
-        vy = (int)(Gx_Gy_MAGNIFICATION * yc) + j;
+        float vy = (int)(Gx_Gy_MAGNIFICATION * yc) + j;
         vy /= Gx_Gy_MAGNIFICATION;
 
         if (0 < vy && vy <= rowsM - 1) {
             for (int i = _start; i < _end; i++) {
-                vx = (int)(Gx_Gy_MAGNIFICATION * xc) + i;
+                float vx = (int)(Gx_Gy_MAGNIFICATION * xc) + i;
                 vx /= Gx_Gy_MAGNIFICATION;
 
                 if (0 < vx && vx <= colsM - 1) {
-                    dx = vx - xc;
-                    dy = vy - yc;
-                    distance = sqrt(dx * dx + dy * dy);
+                    float dx = vx - xc;
+                    float dy = vy - yc;
+                    float distance = sqrt(dx * dx + dy * dy);
 
                     if (distance != 0 && distance <= tSO) {
-                        Gx = imIntGx[(int)(vy * magnification * Gx_Gy_MAGNIFICATION * colsM * Gx_Gy_MAGNIFICATION) + (int)(vx * magnification * Gx_Gy_MAGNIFICATION)];
-                        Gy = imIntGy[(int)(vy * magnification * Gx_Gy_MAGNIFICATION * colsM * Gx_Gy_MAGNIFICATION) + (int)(vx * magnification * Gx_Gy_MAGNIFICATION)];
+                        int index = (int)(vy * magnification * Gx_Gy_MAGNIFICATION * colsM * Gx_Gy_MAGNIFICATION) + (int)(vx * magnification * Gx_Gy_MAGNIFICATION);
+                        float Gx = imIntGx[index];
+                        float Gy = imIntGy[index];
 
-                        distanceWeight = calculate_dw(distance, tSS);
+                        float distanceWeight = calculate_dw(distance, tSS);
                         distanceWeightSum += distanceWeight;
-                        GdotR = Gx*dx + Gy*dy;
+                        float GdotR = Gx * dx + Gy * dy;
 
                         if (GdotR < 0) {
-                            Dk = calculate_dk(Gx, Gy, dx, dy, distance);
+                            float Dk = calculate_dk(Gx, Gy, dx, dy, distance);
                             RGC += Dk * distanceWeight;
                         }
                     }
@@ -65,7 +58,9 @@ float calculate_rgc(int xM, int yM, const float* imIntGx, const float* imIntGy, 
         }
     }
 
-    RGC /= distanceWeightSum;
+    if (distanceWeightSum != 0) {
+        RGC /= distanceWeightSum;
+    }
 
     if (RGC >= 0 && sensitivity > 1) {
         RGC = pow(RGC, sensitivity);
@@ -89,17 +84,13 @@ void radial_gradient_convergence(const float *gradient_col_interp, const float *
     float _sensitivity = sensitivity;
     int _doIntensityWeighting = doIntensityWeighting;
 
-    int rM, cM;
-
-    // Loop over rows and columns (no need for the frame loop anymore)
-    for (rM = _magnification * 2; rM < rowsM - _magnification * 2; rM++) {
-        for (cM = _magnification * 2; cM < colsM - _magnification * 2; cM++) {
-            // If intensity weighting is enabled
+    // Loop over rows and columns
+    for (int rM = _magnification * 2; rM < rowsM - _magnification * 2; rM++) {
+        for (int cM = _magnification * 2; cM < colsM - _magnification * 2; cM++) {
+            float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
             if (_doIntensityWeighting) {
-                float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
                 rgc_map[rM * colsM + cM] = rgc_value * image_interp[rM * colsM + cM];
             } else {
-                float rgc_value = calculate_rgc(cM, rM, gradient_col_interp, gradient_row_interp, colsM, rowsM, _magnification, Gx_Gy_MAGNIFICATION, fwhm, tSO, tSS, _sensitivity);
                 rgc_map[rM * colsM + cM] = rgc_value;
             }
         }

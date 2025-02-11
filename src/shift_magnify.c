@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <math.h>
 
-double cubic(double v) {
-  double a = 0.5;
-  double z = 0;
+float cubic(float v) {
+  float a = 0.5;
+  float z = 0;
   if (v < 0) {
     v = -v;
   }
@@ -24,8 +24,8 @@ float interpolate(const float *image, float r, float c, int rows, int cols) {
 
   const int r_int = (int)floor((float) (r - 0.5));
   const int c_int = (int)floor((float) (c - 0.5));
-  double q = 0;
-  double p = 0;
+  float q = 0;
+  float p = 0;
 
   int r_neighbor, c_neighbor;
 

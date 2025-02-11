@@ -9,14 +9,135 @@
 #include <tiffio.h>
 #include <string.h>
 
-void print_gradients(float *gradient, int rowsM, int colsM) {
-    for (int i = 0; i < rowsM; i++) {
-        for (int j = 0; j < colsM; j++) {
-            // Access flattened 1D array with 2D indexing
-            printf("%f ", gradient[i * colsM + j]);
-        }
-        printf("\n");
+// Function to load a TIFF image into a float array
+float* load_tiff_image(const char *filename, int *width, int *height) {
+    // Open the TIFF file
+    TIFF *tif = TIFFOpen(filename, "r");
+    if (!tif) {
+        fprintf(stderr, "Error: Could not open TIFF file %s\n", filename);
+        return NULL;
     }
+
+    // Reset to the first frame
+    TIFFSetDirectory(tif, 0);
+
+    // Get image dimensions from the first frame
+    TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, width);
+    TIFFGetField(tif, TIFFTAG_IMAGELENGTH, height);
+
+    size_t npixels = (*width) * (*height);
+
+    // Allocate memory for all frames
+    float *image_in = (float *)malloc(npixels * sizeof(float));
+
+    if (!image_in) {
+        fprintf(stderr, "Error: Memory allocation failed for image data\n");
+        TIFFClose(tif);
+        return NULL;
+    }
+
+    // Allocate memory for the raster buffer (uint16_t since TIFF images are often 16-bit)
+    uint16_t *raster = (uint16_t *)_TIFFmalloc(npixels * sizeof(uint16_t));
+    if (!raster) {
+        fprintf(stderr, "Error: Memory allocation failed for raster\n");
+        free(image_in);
+        TIFFClose(tif);
+        return NULL;
+    }
+
+    // Read each scanline of the image (assuming only one frame)
+    for (uint32_t row = 0; row < *height; row++) {
+        if (TIFFReadScanline(tif, &raster[row * (*width)], row, 0) != 1) {
+            fprintf(stderr, "Error: Could not read scanline %d\n", row);
+            _TIFFfree(raster);
+            free(image_in);
+            TIFFClose(tif);
+            return NULL;
+        }
+    }
+
+    // Convert 16-bit raster data to normalized float grayscale and store in image_in
+    for (size_t i = 0; i < npixels; i++) {
+        image_in[i] = (float)raster[i] / 65535.0f;  // Normalize to [0, 1]
+    }
+
+    // Free the raster buffer after processing
+    _TIFFfree(raster);
+
+    // Close the TIFF file
+    TIFFClose(tif);
+
+    printf("Successfully loaded image from TIFF\n");
+    // Return the processed image
+    return image_in;
+}
+
+// Compute Mean Squared Error (MSE)
+float compute_mse(const float *image1, const float *image2, int size) {
+    float mse = 0.0f;
+    for (int i = 0; i < size; i++) {
+        float diff = image1[i] - image2[i];
+        mse += diff * diff;
+    }
+    return mse / size;
+}
+
+// Compute Structural Similarity Index (SSIM)
+float compute_ssim(const float *image1, const float *image2, int size) {
+    float mean1 = 0, mean2 = 0, var1 = 0, var2 = 0, covar = 0;
+    const float C1 = 0.0001f, C2 = 0.0009f; // Small constants for stability
+
+    for (int i = 0; i < size; i++) {
+        mean1 += image1[i];
+        mean2 += image2[i];
+    }
+    mean1 /= size;
+    mean2 /= size;
+
+    for (int i = 0; i < size; i++) {
+        float diff1 = image1[i] - mean1;
+        float diff2 = image2[i] - mean2;
+        var1 += diff1 * diff1;
+        var2 += diff2 * diff2;
+        covar += diff1 * diff2;
+    }
+
+    var1 /= size;
+    var2 /= size;
+    covar /= size;
+
+    return ((2 * mean1 * mean2 + C1) * (2 * covar + C2)) /
+           ((mean1 * mean1 + mean2 * mean2 + C1) * (var1 + var2 + C2));
+}
+
+// Compare two TIFF images
+void compare_tiff_images(const char *generated_file, const char *ground_truth_file) {
+    int width1, height1, width2, height2;
+    float *image1 = load_tiff_image(generated_file, &width1, &height1);
+    float *image2 = load_tiff_image(ground_truth_file, &width2, &height2);
+
+    if (!image1 || !image2) {
+        fprintf(stderr, "Error: Could not load images for comparison\n");
+        return;
+    }
+
+    if (width1 != width2 || height1 != height2) {
+        fprintf(stderr, "Error: Image dimensions do not match!\n");
+        free(image1);
+        free(image2);
+        return;
+    }
+
+    size_t npixels = width1 * height1;
+    float mse = compute_mse(image1, image2, npixels);
+    float ssim = compute_ssim(image1, image2, npixels);
+
+    printf("Comparison Results:\n");
+    printf("  - MSE:  %.6f\n", mse);
+    printf("  - SSIM: %.6f\n", ssim);
+
+    free(image1);
+    free(image2);
 }
 
 void save_tiff(const char *filename, const float *image, uint32_t width, uint32_t height, int nFrames) {
@@ -140,7 +261,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     // Now, use the shift_magnify function on the first image
     int rows = height;
     int cols = width;
-    nFrames = 5;  // We are processing only the first image (frame)
+    nFrames = 1;  // We are processing only the first image (frame)
     
     // Allocate memory for the output image
     int rowsM = (int)(rows * magnification);
@@ -165,9 +286,6 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
         // Copy processed frame into rgc_maps
         memcpy(rgc_maps + (frame * rowsM * colsM), output_frame, rowsM * colsM * sizeof(float));
-
-        // Free the returned frame buffer
-        free(output_frame);
     }
     
     if (!rgc_maps) {
@@ -197,6 +315,7 @@ int main(int argc, char *argv[]) {
     bool doIntensityWeighting = true;
 
     load_tiff_and_process(argv[1], argv[2], shift, magnification, radius, sensitivity, doIntensityWeighting);
+    compare_tiff_images(argv[2], argv[3]);
 
     return 0;
 }

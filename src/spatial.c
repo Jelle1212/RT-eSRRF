@@ -5,21 +5,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define MAX_ROWS    (125 * 5)   
+#define MAX_COLS    (106 * 5)
+#define MAX_INPUT_ROWS  125
+#define MAX_INPUT_COLS  106
+
 float* spatial(const float *image_in, int rows, int cols, 
              float shift, float magnification, float radius, 
              float sensitivity, bool doIntensityWeighting) {
     
     int rowsM = (int)(rows * magnification);
     int colsM = (int)(cols * magnification);
-    float *magnified_image = (float *)malloc(rowsM * colsM * sizeof(float));
 
-    float *gradient_col = (float *)malloc(rows * cols * sizeof(float));
-    float *gradient_row = (float *)malloc(rows * cols * sizeof(float));
+    static float magnified_image[MAX_ROWS * MAX_COLS];
+    static float gradient_col[MAX_INPUT_ROWS * MAX_INPUT_COLS];
+    static float gradient_row[MAX_INPUT_ROWS * MAX_INPUT_COLS];
 
-    float *gradient_col_interp = (float *)malloc(2 * rowsM * 2 * colsM * sizeof(float));
-    float *gradient_row_interp = (float *)malloc(2 * rowsM * 2 * colsM * sizeof(float));
+    static float gradient_col_interp[2 * MAX_ROWS * 2 * MAX_COLS];
+    static float gradient_row_interp[2 * MAX_ROWS * 2 * MAX_COLS];
 
-    float *rgc_map = (float *)malloc(rowsM * colsM * sizeof(float));
+    static float rgc_map[MAX_ROWS * MAX_COLS];
 
     // Call the shift_magnify function to apply shift and magnification
     shift_magnify(image_in, magnified_image, rows, cols, shift, shift, magnification, magnification);
@@ -27,13 +32,6 @@ float* spatial(const float *image_in, int rows, int cols,
     shift_magnify(gradient_col, gradient_col_interp, rows, cols, shift, shift, magnification * 2, magnification * 2);
     shift_magnify(gradient_row, gradient_row_interp, rows, cols, shift, shift, magnification * 2, magnification * 2);
     radial_gradient_convergence(gradient_col_interp, gradient_row_interp, magnified_image, rowsM, colsM, magnification, radius, sensitivity, doIntensityWeighting, rgc_map);
-
-    // Free allocated memory
-    free(magnified_image);
-    free(gradient_col);
-    free(gradient_row);
-    free(gradient_col_interp);
-    free(gradient_row_interp);
 
     return rgc_map;
 }

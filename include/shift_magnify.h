@@ -1,7 +1,7 @@
 #ifndef SHIFT_MAGNIFY_H
 #define SHIFT_MAGNIFY_H
 
-double cubic(double v);
+float cubic(float v);
 float interpolate(const float *image, float r, float c, int rows, int cols);
 void shift_magnify(const float *image_in, float *image_out, 
                    int rows, int cols, 

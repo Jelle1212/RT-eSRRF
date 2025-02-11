@@ -7,4 +7,5 @@
 float* spatial(const float *image_in, int rows, int cols, 
              float shift, float magnification, float radius, 
              float sensitivity, bool doIntensityWeighting);
+
 #endif

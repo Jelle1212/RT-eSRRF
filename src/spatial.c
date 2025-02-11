@@ -2,13 +2,11 @@
 #include "shift_magnify.h"
 #include "roberts_cross_gradients.h"
 #include "radial_gradient_convergence.h"
+#include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_ROWS    (125 * 5)   
-#define MAX_COLS    (106 * 5)
-#define MAX_INPUT_ROWS  125
-#define MAX_INPUT_COLS  106
+
 
 float* spatial(const float *image_in, int rows, int cols, 
              float shift, float magnification, float radius, 

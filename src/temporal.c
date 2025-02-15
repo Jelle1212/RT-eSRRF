@@ -2,109 +2,79 @@
 #include "settings.h"
 #include <stdio.h>
 
-float* temporal(const float* image_stack, int type, int frames, int rows, int cols) {
-    
-    static float SR[MAX_ROWS * MAX_COLS];
+void average(const float* image_stack, float* image_out, int frames, int rows, int cols) {
+    // Compute the mean directly in one pass
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] = 0.0f;
+    }
 
-    if(type == 0) {
+    for (int f = 0; f < frames; f++) {
+        for (int i = 0; i < rows * cols; i++) {
+            image_out[i] += image_stack[f * rows * cols + i];
+        }
+    }
+
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] /= frames;
+    }
+}
+
+void variance(const float* image_stack, float* image_out, float* mean_image, int frames, int rows, int cols) {
+    // Compute the mean
+    average(image_stack, mean_image, frames, rows, cols);
+
+    // Compute variance in a single pass
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] = 0.0f;
+    }
+
+    for (int f = 0; f < frames; f++) {
+        for (int i = 0; i < rows * cols; i++) {
+            float diff = image_stack[f * rows * cols + i] - mean_image[i];
+            image_out[i] += diff * diff;
+        }
+    }
+
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] /= frames;
+    }
+}
+
+void temporal_auto_correlation(const float* image_stack, float* image_out, float* mean_image, int frames, int rows, int cols) {
+    int nlag = 1;
+
+    // Compute the mean
+    average(image_stack, mean_image, frames, rows, cols);
+
+    // Compute the temporal auto-correlation at lag 1
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] = 0.0f;
+    }
+
+    for (int f = 0; f < frames - nlag; f++) {
+        for (int i = 0; i < rows * cols; i++) {
+            float centered1 = image_stack[f * rows * cols + i] - mean_image[i];
+            float centered2 = image_stack[(f + nlag) * rows * cols + i] - mean_image[i];
+            image_out[i] += centered1 * centered2;
+        }
+    }
+
+    for (int i = 0; i < rows * cols; i++) {
+        image_out[i] /= (frames - nlag);
+    }
+}
+
+float* temporal(const float* image_stack, int type, int frames, int rows, int cols) {
+    static float SR[MAX_ROWS * MAX_COLS];
+    static float temp_mean[MAX_ROWS * MAX_COLS];  // Temporary buffer for mean
+
+    if (type == 0) {
         average(image_stack, SR, frames, rows, cols);
-    } else if (type == 1)
-    {
-        variance(image_stack, SR, frames, rows, cols);
+    } else if (type == 1) {
+        variance(image_stack, SR, temp_mean, frames, rows, cols);
     } else {
-        temporal_auto_correlation(image_stack, SR, frames, rows, cols);
+        temporal_auto_correlation(image_stack, SR, temp_mean, frames, rows, cols);
     }
 
     return SR;
-
-}
-
-void average(const float* image_stack, float* image_out, int frames, int rows, int cols) {
-    // Initialize the output array to zero
-    for (int i = 0; i < rows * cols; i++) {
-        image_out[i] = 0.0f;
-    }
-
-    // Sum the pixel values across all frames
-    for (int f = 0; f < frames; f++) {
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                int index = f * rows * cols + r * cols + c;
-                image_out[r * cols + c] += image_stack[index];
-            }
-        }
-    }
-
-    // Divide by the number of frames to compute the average
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            image_out[r * cols + c] /= frames;
-        }
-    }
-}
-
-void variance(const float* image_stack, float* image_out, int frames, int rows, int cols) {
-    // Static array for the mean image
-    static float mean_image[MAX_INPUT_ROWS * MAX_INPUT_COLS];
-
-    // Compute the mean of the image stack
-    average(image_stack, mean_image, frames, rows, cols);
-
-    // Initialize the output array to zero
-    for (int i = 0; i < rows * cols; i++) {
-        image_out[i] = 0.0f;
-    }
-
-    // Compute the squared differences from the mean
-    for (int f = 0; f < frames; f++) {
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                int index = f * rows * cols + r * cols + c;
-                float diff = image_stack[index] - mean_image[r * cols + c];
-                image_out[r * cols + c] += diff * diff;
-            }
-        }
-    }
-
-    // Divide by the number of frames to compute the variance
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            image_out[r * cols + c] /= frames;
-        }
-    }
-}
-
-void temporal_auto_correlation(const float* image_stack, float* image_out, int frames, int rows, int cols) {
-    // Static array for the mean image
-    static float mean_image[MAX_INPUT_ROWS * MAX_INPUT_COLS];
-
-    // Step 1: Compute the mean of the image stack along the time axis
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            mean_image[r * cols + c] = 0.0f;
-            for (int f = 0; f < frames; f++) {
-                int index = f * rows * cols + r * cols + c;
-                mean_image[r * cols + c] += image_stack[index];
-            }
-            mean_image[r * cols + c] /= frames;
-        }
-    }
-
-    // Step 2: Compute the temporal auto-correlation at lag 1
-    int nlag = 1;
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            image_out[r * cols + c] = 0.0f;
-            for (int f = 0; f < frames - nlag; f++) {
-                int index1 = f * rows * cols + r * cols + c;
-                int index2 = (f + nlag) * rows * cols + r * cols + c;
-                // Center the data on-the-fly and compute the product
-                float centered1 = image_stack[index1] - mean_image[r * cols + c];
-                float centered2 = image_stack[index2] - mean_image[r * cols + c];
-                image_out[r * cols + c] += centered1 * centered2;
-            }
-            // Step 3: Average the result along the time axis
-            image_out[r * cols + c] /= (frames - nlag);
-        }
-    }
 }

@@ -11,7 +11,7 @@ SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Executable name
-TARGET = FPGA-ESRRF
+TARGET = ESRRF
 
 # Build rules
 all: $(TARGET)

@@ -1,0 +1,19 @@
+#ifndef SHIFT_MAGNIFY_HU
+#define SHIFT_MAGNIFY_HU
+
+#include <cuda_runtime.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Function declaration for the host function
+void shift_magnify(const float *image_in, float *image_out, 
+                     int rows, int cols, float shift_row, float shift_col, 
+                     float magnification_row, float magnification_col, cudaStream_t stream);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

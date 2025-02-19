@@ -1,0 +1,17 @@
+#ifndef RADIAL_GRADIENT_CONVERGENCE_HU
+#define RADIAL_GRADIENT_CONVERGENCE_HU
+
+#include <cuda_runtime.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    void radial_gradient_convergence(const float *gradient_col_interp, const float *gradient_row_interp, const float *image_interp, int rowsM, int colsM, int magnification, float radius, float sensitivity, int doIntensityWeighting, float *rgc_map);     
+
+#ifdef __cplusplus
+}
+#endif
+    
+
+#endif

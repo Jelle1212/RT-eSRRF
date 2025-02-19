@@ -1,0 +1,21 @@
+#ifndef SPATIAL_HU
+#define SPATIAL_HU
+
+#include <cuda_runtime.h>
+
+#include <stdio.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    float* spatial(const float *image_in, int rows, int cols, 
+        float shift, float magnification, float radius, 
+        float sensitivity, bool doIntensityWeighting);
+        
+#ifdef __cplusplus
+}
+#endif
+
+#endif

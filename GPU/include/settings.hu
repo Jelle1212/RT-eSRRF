@@ -1,0 +1,7 @@
+#ifndef SETTINGS_HU
+#define SETTINGS_HU
+#define MAX_ROWS    (125 * 5)   
+#define MAX_COLS    (106 * 5)
+#define MAX_INPUT_ROWS  125
+#define MAX_INPUT_COLS  106
+#endif

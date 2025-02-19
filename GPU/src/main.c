@@ -1,8 +1,8 @@
-#include "spatial.h"
-#include "temporal.h"
-#include "shift_magnify.h"
-#include "roberts_cross_gradients.h"
-#include "radial_gradient_convergence.h"
+#include "spatial.hu"
+#include "temporal.hu"
+#include "shift_magnify.hu"
+#include "roberts_cross_gradients.hu"
+#include "radial_gradient_convergence.hu"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -298,7 +298,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
         // Offset to process one frame at a time
         const float *input_frame = image_in + (frame * rows * cols);
         float *output_frame = spatial(input_frame, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
-        
+
         if (!output_frame) {
             fprintf(stderr, "Error: spatial function returned NULL\n");
             free(rgc_maps);
@@ -344,7 +344,7 @@ int main(int argc, char *argv[]) {
     float radius = 2.0;
     float sensitivity = 1.0;
     bool doIntensityWeighting = true;
-    int temporalType = 1;
+    int temporalType = 2;
 
     load_tiff_and_process(argv[1], argv[2], shift, magnification, radius, sensitivity, doIntensityWeighting, temporalType);
     compare_tiff_images(argv[2], argv[3]);

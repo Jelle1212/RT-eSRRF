@@ -1,0 +1,15 @@
+#ifndef ROBERTS_CROSS_GRADIENTS_HU
+#define ROBERTS_CROSS_GRADIENTS_HU
+
+#include <cuda_runtime.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+    void roberts_cross_gradients(const float *image, float *gradient_col, float *gradient_row, 
+        int rows, int cols, cudaStream_t stream);
+    #ifdef __cplusplus
+}
+#endif
+
+#endif

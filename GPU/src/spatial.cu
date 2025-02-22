@@ -8,25 +8,10 @@
 
 
 extern "C" {
-    void spatial(const float *d_image_in, float* d_rgc_map, int rows, int cols, 
-                float shift, float magnification, float radius, 
-                float sensitivity, bool doIntensityWeighting) {
+    void spatial(SpatialParams &params) {
 
-        float *d_magnified_image;
-        float *d_gradient_col;
-        float *d_gradient_row;
-        float *d_gradient_col_interp;
-        float *d_gradient_row_interp;
-        
-        int rowsM = (int)(rows * magnification);
-        int colsM = (int)(cols * magnification);
-
-        // Allocate memory on the GPU
-        cudaMalloc((void**)&d_magnified_image, MAX_ROWS * MAX_COLS * sizeof(float));
-        cudaMalloc((void**)&d_gradient_col, MAX_INPUT_ROWS * MAX_INPUT_COLS * sizeof(float));
-        cudaMalloc((void**)&d_gradient_row, MAX_INPUT_ROWS * MAX_INPUT_COLS * sizeof(float));
-        cudaMalloc((void**)&d_gradient_col_interp, 2 * MAX_ROWS * 2 * MAX_COLS * sizeof(float));
-        cudaMalloc((void**)&d_gradient_row_interp, 2 * MAX_ROWS * 2 * MAX_COLS * sizeof(float));
+        int rowsM = (int)(params.rows * params.magnification);
+        int colsM = (int)(params.cols * params.magnification);
 
         // Create CUDA streams
         cudaStream_t stream1, stream2, stream3, stream4;
@@ -36,27 +21,21 @@ extern "C" {
         cudaStreamCreate(&stream4);
 
         // Call the shift_magnify function to apply shift and magnification
-        shift_magnify(d_image_in, d_magnified_image, rows, cols, shift, shift, magnification, magnification, stream1);
-        roberts_cross_gradients(d_image_in, d_gradient_col, d_gradient_row, rows, cols, stream2);
+        shift_magnify(params.d_image_in, params.d_magnified_image, params.rows, params.cols, params.shift, params.shift, params.magnification, params.magnification, stream1);
+        roberts_cross_gradients(params.d_image_in, params.d_gradient_col, params.d_gradient_row, params.rows, params.cols, stream2);
 
         // Synchronize streams to ensure both operations are complete
         cudaStreamSynchronize(stream1);
         cudaStreamSynchronize(stream2);
 
-        shift_magnify(d_gradient_col, d_gradient_col_interp, rows, cols, shift, shift, magnification * 2, magnification * 2, stream3);
-        shift_magnify(d_gradient_row, d_gradient_row_interp, rows, cols, shift, shift, magnification * 2, magnification * 2, stream4);
+        shift_magnify(params.d_gradient_col, params.d_gradient_col_interp, params.rows, params.cols, params.shift, params.shift, params.magnification * 2, params.magnification * 2, stream3);
+        shift_magnify(params.d_gradient_row, params.d_gradient_row_interp, params.rows, params.cols, params.shift, params.shift, params.magnification * 2, params.magnification * 2, stream4);
         
         // Synchronize streams to ensure both operations are complete
         cudaStreamSynchronize(stream3);
         cudaStreamSynchronize(stream4);
         
-        radial_gradient_convergence(d_gradient_col_interp, d_gradient_row_interp, d_magnified_image, rowsM, colsM, magnification, radius, sensitivity, doIntensityWeighting, d_rgc_map);
-        
-        cudaFree(d_magnified_image);
-        cudaFree(d_gradient_col);
-        cudaFree(d_gradient_row);
-        cudaFree(d_gradient_col_interp);
-        cudaFree(d_gradient_row_interp);
+        radial_gradient_convergence(params.d_gradient_col_interp, params.d_gradient_row_interp, params.d_magnified_image, rowsM, colsM, params.magnification, params.radius, params.sensitivity, params.doIntensityWeighting, params.d_rgc_map);
 
         // Destroy streams
         cudaStreamDestroy(stream1);

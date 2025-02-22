@@ -9,10 +9,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-    void spatial(const float *d_image_in, float *d_rgc_map, int rows, int cols, 
-        float shift, float magnification, float radius, 
-        float sensitivity, bool doIntensityWeighting);
+    struct SpatialParams {
+        float *d_image_in;
+        float *d_rgc_map;
+        float *d_magnified_image;
+        float *d_gradient_col;
+        float *d_gradient_row;
+        float *d_gradient_col_interp;
+        float *d_gradient_row_interp;
+        int rows, cols;
+        float shift, magnification, radius, sensitivity;
+        bool doIntensityWeighting;
+    };
+    void spatial(SpatialParams &params);
         
 #ifdef __cplusplus
 }

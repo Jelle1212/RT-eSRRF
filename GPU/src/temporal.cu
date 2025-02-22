@@ -43,25 +43,28 @@ __global__ void temporal_auto_correlation_kernel(
 }
 
 extern "C" {
-    void temporal(const float* d_image_stack, float* d_image_out, float* d_mean_image, int type, int frames, int rows, int cols) {
-        int total_pixels = rows * cols;
+    void temporal(TemporalParams &temporalParams) {
+        int total_pixels = temporalParams.rowsM * temporalParams.colsM;
         int nlag = 1;
 
         // Define block and grid size
         dim3 blockSize(THREADS_PER_BLOCK);
         dim3 gridSize((total_pixels + blockSize.x - 1) / blockSize.x);
 
-        if (type == 0) {
-            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, frames, total_pixels);
-        } else if (type == 1) {
-            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
+        if (temporalParams.type == 0) {
+            average_kernel<<<gridSize, blockSize>>>(temporalParams.d_rgc_maps, temporalParams.d_sr_image, temporalParams.frames, total_pixels);
+        } else if (temporalParams.type == 1) {
+            average_kernel<<<gridSize, blockSize>>>(temporalParams.d_rgc_maps, temporalParams.d_mean_image, temporalParams.frames, total_pixels);
             cudaDeviceSynchronize();  // Ensure mean is computed before using it
-            variance_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, d_mean_image, frames, total_pixels);
-        } else {
-            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
+            variance_kernel<<<gridSize, blockSize>>>(temporalParams.d_rgc_maps, temporalParams.d_sr_image, temporalParams.d_mean_image, temporalParams.frames, total_pixels);
+        } else if (temporalParams.type == 2){
+            average_kernel<<<gridSize, blockSize>>>(temporalParams.d_rgc_maps, temporalParams.d_mean_image, temporalParams.frames, total_pixels);
             cudaDeviceSynchronize();
             temporal_auto_correlation_kernel<<<gridSize, blockSize>>>(
-                d_image_stack, d_image_out, d_mean_image, frames, total_pixels, nlag);
+                temporalParams.d_rgc_maps, temporalParams.d_sr_image, temporalParams.d_mean_image, temporalParams.frames, total_pixels, nlag);
+        } else {
+            printf("ERROR: Unsupported Temporal Type: %d\n", temporalParams.type);
+            return;
         }
     }
 }

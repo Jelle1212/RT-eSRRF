@@ -3,6 +3,7 @@
 
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define CHECK_CUDA(call) do { \
     cudaError_t err = call; \
@@ -15,9 +16,19 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-    void initPipeline(int nFrames, int rows, int cols, int magnification);
-    void processFrame(const float* image_in, float* sr_image, int frame_index, int nFrames, int rows, int cols, int magnification, int shift, int radius, int sensitivity, bool doIntensityWeighting, int type);     
+    struct ESRRFParams {
+        int nFrames;
+        int rows;
+        int cols;
+        float shift;
+        float magnification;
+        float radius;
+        float sensitivity;
+        bool doIntensityWeighting;
+        int temporalType;
+    };
+    void initPipeline(const struct ESRRFParams* eSRRFParams);
+    void processFrame(const float* image_in, float* sr_image, int frame_index);     
     void deintPipeline();
 #ifdef __cplusplus
 }

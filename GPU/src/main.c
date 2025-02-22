@@ -1,8 +1,3 @@
-#include "spatial.hu"
-#include "temporal.hu"
-#include "shift_magnify.hu"
-#include "roberts_cross_gradients.hu"
-#include "radial_gradient_convergence.hu"
 #include "pipeline.hu"
 #include <stdio.h>
 #include <stdbool.h>
@@ -203,9 +198,7 @@ void save_tiff(const char *filename, const float *image, uint32_t width, uint32_
 }
 
 
-void load_tiff_and_process(const char *input_filename, const char *output_filename, 
-                           float shift, float magnification, float radius,
-                           float sensitivity, bool doIntensityWeighting, int temporalType) {
+void load_tiff_and_process(const char *input_filename, const char *output_filename, struct ESRRFParams *eSRRFParams) {
     // Open the TIFF file
     TIFF *tif = TIFFOpen(input_filename, "r");
     if (!tif) {
@@ -281,28 +274,21 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     printf("Loaded %d frames from TIFF image (%dx%d each)\n", nFrames, width, height);
 
     // Now, use the shift_magnify function on the first image
-    int rows = height;
-    int cols = width;
-    nFrames = 50;  // We are processing only the first image (frame)
+    eSRRFParams->rows = height;
+    eSRRFParams->cols = width;
     
     // Allocate memory for the output image
-    int rowsM = (int)(rows * magnification);
-    int colsM = (int)(cols * magnification);
+    int rowsM = (int)(eSRRFParams->rows * eSRRFParams->magnification);
+    int colsM = (int)(eSRRFParams->cols * eSRRFParams->magnification);
 
-    float *rgc_maps = (float *)malloc(nFrames * rowsM * colsM * sizeof(float));
-    if (!rgc_maps) {
-        fprintf(stderr, "Error: Memory allocation failed for rgc_maps\n");
-        return;
-    }
-
-    initPipeline(nFrames, rows, cols, magnification);
+    initPipeline(eSRRFParams);
     float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
 
     for (int frame = 0; frame < nFrames; frame++) {
         // Offset to process one frame at a time
-        const float *input_frame = image_in + (frame * rows * cols);
+        const float *input_frame = image_in + (frame * eSRRFParams->rows * eSRRFParams->cols);
 
-        processFrame(input_frame, sr_image, frame, nFrames, rows, cols, magnification, shift, radius, sensitivity, doIntensityWeighting, temporalType);
+        processFrame(input_frame, sr_image, frame);
     }
 
     if (!sr_image) {
@@ -314,7 +300,6 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     save_tiff(output_filename, sr_image, colsM, rowsM, 1);
 
     // Free the allocated memory
-    free(rgc_maps);
     deintPipeline();
 }
 
@@ -331,9 +316,22 @@ int main(int argc, char *argv[]) {
     float radius = 2.0;
     float sensitivity = 1.0;
     bool doIntensityWeighting = true;
-    int temporalType = 0;
+    int temporalType = 2;
+    int nFrames = 50;
 
-    load_tiff_and_process(argv[1], argv[2], shift, magnification, radius, sensitivity, doIntensityWeighting, temporalType);
+    struct ESRRFParams eSRRFParams = {
+        .nFrames = nFrames, 
+        .rows = 0, 
+        .cols = 0, 
+        .shift = shift, 
+        .magnification = magnification, 
+        .radius = radius, 
+        .sensitivity = sensitivity, 
+        .doIntensityWeighting = doIntensityWeighting, 
+        .temporalType = temporalType
+    };
+
+    load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
     compare_tiff_images(argv[2], argv[3]);
 
     return 0;

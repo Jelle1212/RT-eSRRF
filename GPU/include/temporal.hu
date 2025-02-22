@@ -13,9 +13,6 @@ extern "C" {
         int rowsM, colsM, type, frames;
     };
     void temporal(TemporalParams &temporalParams);
-    void average(const float* image_stack, float* image_out, int frames, int rows, int cols);
-    void variance(const float* image_stack, float* image_out, float* mean_image, int frames, int rows, int cols);
-    void temporal_auto_correlation(const float* d_image_stack, float* d_image_out, float* d_mean_image, int frames, int rows, int cols);    
 #ifdef __cplusplus
 }
 #endif

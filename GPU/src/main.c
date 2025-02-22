@@ -284,7 +284,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     initPipeline(eSRRFParams);
     float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
 
-    for (int frame = 0; frame < nFrames; frame++) {
+    for (int frame = 0; frame < eSRRFParams->nFrames; frame++) {
         // Offset to process one frame at a time
         const float *input_frame = image_in + (frame * eSRRFParams->rows * eSRRFParams->cols);
 

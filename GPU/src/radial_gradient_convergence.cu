@@ -118,7 +118,4 @@ extern "C" void radial_gradient_convergence(const float *gradient_col_interp, co
     radial_gradient_convergence_kernel<<<gridSize, blockSize>>>(gradient_col_interp, gradient_row_interp, 
                                                                 image_interp, rowsM, colsM, magnification, 
                                                                 radius, sensitivity, doIntensityWeighting, rgc_map);
-
-    // Synchronize to ensure kernel execution is complete
-    cudaDeviceSynchronize();
 }

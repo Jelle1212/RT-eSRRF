@@ -1,29 +1,27 @@
 #include "temporal.hu"
-#include "settings.hu"
 #include <stdio.h>
 
 #define THREADS_PER_BLOCK 256  // Adjust based on architecture
 
-__global__ void average_kernel(const float* image_stack, float* image_out, int frames, int total_pixels) {
+__global__ void incremental_average_kernel(const float* d_rgc_map, float* d_mean_image, int frame_idx, int frames, int total_pixels) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < total_pixels) {
-        float sum = 0.0f;
-        for (int f = 0; f < frames; f++) {
-            sum += image_stack[f * total_pixels + idx];
-        }
-        image_out[idx] = sum / frames;
+        d_mean_image[idx] = d_mean_image[idx] + (d_rgc_map[idx] - d_mean_image[idx]) / (float)frames;
     }
 }
 
-__global__ void variance_kernel(const float* image_stack, float* image_out, const float* mean_image, int frames, int total_pixels) {
+__global__ void incremental_variance_kernel(const float* d_rgc_map, float* d_mean_image, float* d_var_image, int frame_idx, int total_pixels) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < total_pixels) {
-        float var_sum = 0.0f;
-        for (int f = 0; f < frames; f++) {
-            float diff = image_stack[f * total_pixels + idx] - mean_image[idx];
-            var_sum += diff * diff;
-        }
-        image_out[idx] = var_sum / frames;
+        float old_mean = d_mean_image[idx];
+        float alpha = 1.0f / (frame_idx + 1);
+        
+        // Update mean
+        float new_mean = (1 - alpha) * old_mean + alpha * d_rgc_map[idx];
+        d_mean_image[idx] = new_mean;
+
+        // Update variance using Welford’s method
+        d_var_image[idx] += (d_rgc_map[idx] - old_mean) * (d_rgc_map[idx] - new_mean);
     }
 }
 
@@ -43,7 +41,7 @@ __global__ void temporal_auto_correlation_kernel(
 }
 
 extern "C" {
-    void temporal(TemporalParams &params) {
+    void temporal(TemporalParams &params, float *d_rgc_map) {
         int total_pixels = params.rowsM * params.colsM;
         int nlag = 1;
 
@@ -52,16 +50,15 @@ extern "C" {
         dim3 gridSize((total_pixels + blockSize.x - 1) / blockSize.x);
 
         if (params.type == 0) {
-            average_kernel<<<gridSize, blockSize>>>(params.d_rgc_maps, params.d_sr_image, params.frames, total_pixels);
+            printf("%d\n",params.frame_idx);
+            incremental_average_kernel<<<gridSize, blockSize>>>(d_rgc_map, params.d_sr_image, params.frame_idx, params.frames, total_pixels);
         } else if (params.type == 1) {
-            average_kernel<<<gridSize, blockSize>>>(params.d_rgc_maps, params.d_mean_image, params.frames, total_pixels);
-            cudaDeviceSynchronize();  // Ensure mean is computed before using it
-            variance_kernel<<<gridSize, blockSize>>>(params.d_rgc_maps, params.d_sr_image, params.d_mean_image, params.frames, total_pixels);
+            incremental_variance_kernel<<<gridSize, blockSize>>>(d_rgc_map, params.d_sr_image, params.d_mean_image, params.frame_idx, total_pixels);
         } else if (params.type == 2){
-            average_kernel<<<gridSize, blockSize>>>(params.d_rgc_maps, params.d_mean_image, params.frames, total_pixels);
-            cudaDeviceSynchronize();
-            temporal_auto_correlation_kernel<<<gridSize, blockSize>>>(
-                params.d_rgc_maps, params.d_sr_image, params.d_mean_image, params.frames, total_pixels, nlag);
+            // average_kernel<<<gridSize, blockSize>>>(params.d_rgc_maps, params.d_mean_image, params.frames, total_pixels);
+            // cudaDeviceSynchronize();
+            // temporal_auto_correlation_kernel<<<gridSize, blockSize>>>(
+            //     params.d_rgc_maps, params.d_sr_image, params.d_mean_image, params.frames, total_pixels, nlag);
         } else {
             printf("ERROR: Unsupported Temporal Type: %d\n", params.type);
             return;

@@ -23,6 +23,10 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     CHECK_CUDA(cudaMalloc(&spatialParams.d_gradient_row, eSRRFParams->rows * eSRRFParams->cols * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&spatialParams.d_gradient_col_interp, 2 * rowsM * 2 * colsM * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&spatialParams.d_gradient_row_interp, 2 * rowsM * 2 * colsM * sizeof(float)));
+    CHECK_CUDA(cudaStreamCreate(&spatialParams.stream1));
+    CHECK_CUDA(cudaStreamCreate(&spatialParams.stream2));
+    CHECK_CUDA(cudaStreamCreate(&spatialParams.stream3));
+    CHECK_CUDA(cudaStreamCreate(&spatialParams.stream4));
     CHECK_CUDA(cudaStreamCreate(&stream1));
     CHECK_CUDA(cudaStreamCreate(&stream2));
     CHECK_CUDA(cudaStreamCreate(&stream3));
@@ -76,6 +80,10 @@ extern "C" void deintPipeline() {
     CHECK_CUDA(cudaFree(temporalParams.d_sr_image));
     CHECK_CUDA(cudaFree(temporalParams.d_rgc_maps));
 
+    CHECK_CUDA(cudaStreamDestroy(spatialParams.stream1));
+    CHECK_CUDA(cudaStreamDestroy(spatialParams.stream2));
+    CHECK_CUDA(cudaStreamDestroy(spatialParams.stream3));
+    CHECK_CUDA(cudaStreamDestroy(spatialParams.stream4));
     CHECK_CUDA(cudaStreamDestroy(stream1));
     CHECK_CUDA(cudaStreamDestroy(stream2));
     CHECK_CUDA(cudaStreamDestroy(stream3));

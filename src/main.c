@@ -329,6 +329,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
     // Free the allocated memory
     free(rgc_maps);
+    deintPipeline();
 }
 
 

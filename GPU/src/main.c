@@ -310,25 +310,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Example parameters
-    float shift = 0.0f;
-    float magnification = 5.0;
-    float radius = 2.0;
-    float sensitivity = 1.0;
-    bool doIntensityWeighting = true;
-    int temporalType = 2;
-    int nFrames = 50;
-
     struct ESRRFParams eSRRFParams = {
-        .nFrames = nFrames, 
+        .nFrames = atoi(argv[4]), 
         .rows = 0, 
         .cols = 0, 
-        .shift = shift, 
-        .magnification = magnification, 
-        .radius = radius, 
-        .sensitivity = sensitivity, 
-        .doIntensityWeighting = doIntensityWeighting, 
-        .temporalType = temporalType
+        .shift = atof(argv[5]), 
+        .magnification = atof(argv[6]), 
+        .radius = atof(argv[7]), 
+        .sensitivity = atof(argv[8]), 
+        .doIntensityWeighting = atoi(argv[9]), 
+        .temporalType = atoi(argv[10])
     };
 
     load_tiff_and_process(argv[1], argv[2], &eSRRFParams);

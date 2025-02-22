@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-    float* spatial(const float *image_in, int rows, int cols, 
+    void spatial(const float *d_image_in, float *d_rgc_map, int rows, int cols, 
         float shift, float magnification, float radius, 
         float sensitivity, bool doIntensityWeighting);
         

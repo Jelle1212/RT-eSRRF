@@ -43,44 +43,25 @@ __global__ void temporal_auto_correlation_kernel(
 }
 
 extern "C" {
-float* temporal(const float* image_stack, int type, int frames, int rows, int cols) {
-    static float SR[MAX_ROWS * MAX_COLS];
-    float *d_mean_image, *d_image_stack, *d_image_out;
-    int total_pixels = rows * cols;
-    int nlag = 1;
+    void temporal(const float* d_image_stack, float* d_image_out, float* d_mean_image, int type, int frames, int rows, int cols) {
+        int total_pixels = rows * cols;
+        int nlag = 1;
 
-    // Allocate GPU memory dynamically based on rows/cols instead of MAX_ROWS*MAX_COLS
-    cudaMalloc((void**)&d_image_stack, frames * total_pixels * sizeof(float));
-    cudaMalloc((void**)&d_mean_image, total_pixels * sizeof(float));
-    cudaMalloc((void**)&d_image_out, total_pixels * sizeof(float));
+        // Define block and grid size
+        dim3 blockSize(THREADS_PER_BLOCK);
+        dim3 gridSize((total_pixels + blockSize.x - 1) / blockSize.x);
 
-    // Copy input image stack to device
-    cudaMemcpy(d_image_stack, image_stack, frames * total_pixels * sizeof(float), cudaMemcpyHostToDevice);
-
-    // Define block and grid size
-    dim3 blockSize(THREADS_PER_BLOCK);
-    dim3 gridSize((total_pixels + blockSize.x - 1) / blockSize.x);
-
-    if (type == 0) {
-        average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, frames, total_pixels);
-    } else if (type == 1) {
-        average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
-        cudaDeviceSynchronize();  // Ensure mean is computed before using it
-        variance_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, d_mean_image, frames, total_pixels);
-    } else {
-        average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
-        cudaDeviceSynchronize();
-        temporal_auto_correlation_kernel<<<gridSize, blockSize>>>(
-            d_image_stack, d_image_out, d_mean_image, frames, total_pixels, nlag);
+        if (type == 0) {
+            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, frames, total_pixels);
+        } else if (type == 1) {
+            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
+            cudaDeviceSynchronize();  // Ensure mean is computed before using it
+            variance_kernel<<<gridSize, blockSize>>>(d_image_stack, d_image_out, d_mean_image, frames, total_pixels);
+        } else {
+            average_kernel<<<gridSize, blockSize>>>(d_image_stack, d_mean_image, frames, total_pixels);
+            cudaDeviceSynchronize();
+            temporal_auto_correlation_kernel<<<gridSize, blockSize>>>(
+                d_image_stack, d_image_out, d_mean_image, frames, total_pixels, nlag);
+        }
     }
-
-    cudaMemcpy(SR, d_image_out, total_pixels * sizeof(float), cudaMemcpyDeviceToHost);
-
-    // Free GPU memory
-    cudaFree(d_mean_image);
-    cudaFree(d_image_stack);
-    cudaFree(d_image_out);
-
-    return SR;
-}
 }

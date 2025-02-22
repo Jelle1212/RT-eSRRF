@@ -1,8 +1,10 @@
+#include "pipeline.hu"
+#include "spatial.hu"
+#include "temporal.hu"
 #include <cuda_runtime.h>
 #include <stdio.h>
 
-// Preallocate GPU memory for spatial processing
-float *d_rgc_maps, *d_sr_image, *d_input_frame, *d_output_frame;
+float *d_rgc_maps, *d_sr_image, *d_input_frame, *d_output_frame, *d_mean_image;
 cudaStream_t stream1, stream2, stream3, stream4;
 
 extern "C" void initPipeline(int nFrames, int rows, int cols, int magnification) {
@@ -10,42 +12,48 @@ extern "C" void initPipeline(int nFrames, int rows, int cols, int magnification)
     int colsM = cols * magnification;
     int total_pixels = rowsM * colsM;
 
-    cudaMalloc(&d_rgc_maps, nFrames * total_pixels * sizeof(float));
-    cudaMalloc(&d_sr_image, total_pixels * sizeof(float));
-    cudaMalloc(&d_input_frame, rows * cols * sizeof(float));
-    cudaMalloc(&d_output_frame, total_pixels * sizeof(float));
-
-    cudaStreamCreate(&stream1);
-    cudaStreamCreate(&stream2);
-    cudaStreamCreate(&stream3);
-    cudaStreamCreate(&stream4);
+    CHECK_CUDA(cudaMalloc(&d_rgc_maps, nFrames * total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_sr_image, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_input_frame, rows * cols * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_output_frame, total_pixels * sizeof(float))); // Pre-allocated buffer
+    CHECK_CUDA(cudaMalloc(&d_mean_image, total_pixels * sizeof(float))); // Pre-allocated buffer
+    CHECK_CUDA(cudaStreamCreate(&stream1));
+    CHECK_CUDA(cudaStreamCreate(&stream2));
+    CHECK_CUDA(cudaStreamCreate(&stream3));
+    CHECK_CUDA(cudaStreamCreate(&stream4));
 }
 
-extern "C" void processFrame(const float* image_in, float* sr_image, int frame_index, int nFrames, int rows, int cols, int magnification) {
+extern "C" void processFrame(const float* image_in, float* sr_image, int frame_index, int nFrames, int rows, int cols, int magnification, int shift, int radius, int sensitivity, bool doIntensityWeighting, int type) {
     int rowsM = rows * magnification;
     int colsM = cols * magnification;
     int total_pixels = rowsM * colsM;
+    int buffer_offset = (frame_index % nFrames) * total_pixels;
 
-    // Copy frame to GPU
-    cudaMemcpyAsync(d_input_frame, image_in, rows * cols * sizeof(float), cudaMemcpyHostToDevice, stream1);
+    // Async Copy: Host to Device
+    CHECK_CUDA(cudaMemcpyAsync(d_input_frame, image_in, rows * cols * sizeof(float), cudaMemcpyHostToDevice, stream1));
 
-    // Run spatial processing
+    // Spatial processing: directly writes to pre-allocated d_output_frame
     spatial(d_input_frame, d_output_frame, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
 
-    // Copy processed frame into GPU buffer
-    int buffer_offset = (frame_index % nFrames) * total_pixels;
-    cudaMemcpyAsync(d_rgc_maps + buffer_offset, d_output_frame, total_pixels * sizeof(float), cudaMemcpyDeviceToDevice, stream2);
+    // Async Copy: Device to Device
+    CHECK_CUDA(cudaMemcpyAsync(d_rgc_maps + buffer_offset, d_output_frame, total_pixels * sizeof(float), cudaMemcpyDeviceToDevice, stream3));
 
-    // When buffer is full, trigger temporal processing
+    // Trigger temporal processing only when buffer is full
     if (frame_index >= nFrames - 1) {
-        int blockSize = 256;
-        int gridSize = (total_pixels + blockSize - 1) / blockSize;
-        temporal_kernel<<<gridSize, blockSize, 0, stream3>>>(d_rgc_maps, d_sr_image, nFrames, rowsM, colsM);
-        cudaMemcpyAsync(sr_image, d_sr_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4);
+        temporal(d_rgc_maps, d_sr_image, d_mean_image, type, nFrames, rowsM, colsM);
+        CHECK_CUDA(cudaMemcpyAsync(sr_image, d_sr_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
     }
+}
 
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
-    cudaStreamSynchronize(stream4);
+extern "C" void deintPipeline() {
+    CHECK_CUDA(cudaFree(d_rgc_maps));
+    CHECK_CUDA(cudaFree(d_sr_image));
+    CHECK_CUDA(cudaFree(d_input_frame));
+    CHECK_CUDA(cudaFree(d_output_frame));
+    CHECK_CUDA(cudaFree(d_mean_image));
+
+    CHECK_CUDA(cudaStreamDestroy(stream1));
+    CHECK_CUDA(cudaStreamDestroy(stream2));
+    CHECK_CUDA(cudaStreamDestroy(stream3));
+    CHECK_CUDA(cudaStreamDestroy(stream4));
 }

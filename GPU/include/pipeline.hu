@@ -1,0 +1,25 @@
+#ifndef PIPELINE_H
+#define PIPELINE_H
+
+#include <cuda_runtime.h>
+#include <stdio.h>
+
+#define CHECK_CUDA(call) do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        printf("CUDA Error: %s at %s:%d\n", cudaGetErrorString(err), __FILE__, __LINE__); \
+        exit(EXIT_FAILURE); \
+    } \
+} while (0)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    void initPipeline(int nFrames, int rows, int cols, int magnification);
+    void processFrame(const float* image_in, float* sr_image, int frame_index, int nFrames, int rows, int cols, int magnification, int shift, int radius, int sensitivity, bool doIntensityWeighting, int type);     
+    void deintPipeline();
+#ifdef __cplusplus
+}
+#endif
+#endif

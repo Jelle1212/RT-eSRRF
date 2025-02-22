@@ -8,7 +8,7 @@
 
 
 extern "C" {
-    float* spatial(const float *image_in, int rows, int cols, 
+    void spatial(const float *d_image_in, float* d_rgc_map, int rows, int cols, 
                 float shift, float magnification, float radius, 
                 float sensitivity, bool doIntensityWeighting) {
 
@@ -17,8 +17,6 @@ extern "C" {
         float *d_gradient_row;
         float *d_gradient_col_interp;
         float *d_gradient_row_interp;
-        float *d_rgc_map;
-        float *d_image_in;
         
         int rowsM = (int)(rows * magnification);
         int colsM = (int)(cols * magnification);
@@ -29,13 +27,6 @@ extern "C" {
         cudaMalloc((void**)&d_gradient_row, MAX_INPUT_ROWS * MAX_INPUT_COLS * sizeof(float));
         cudaMalloc((void**)&d_gradient_col_interp, 2 * MAX_ROWS * 2 * MAX_COLS * sizeof(float));
         cudaMalloc((void**)&d_gradient_row_interp, 2 * MAX_ROWS * 2 * MAX_COLS * sizeof(float));
-        cudaMalloc((void**)&d_rgc_map, MAX_ROWS * MAX_COLS * sizeof(float));
-        cudaMalloc((void**)&d_image_in, MAX_INPUT_ROWS * MAX_INPUT_COLS * sizeof(float));
-
-        // Step 2: Copy data from host to GPU
-        cudaMemcpy(d_image_in, image_in, MAX_INPUT_ROWS * MAX_INPUT_COLS * sizeof(float), cudaMemcpyHostToDevice);
-
-        static float rgc_map[MAX_ROWS * MAX_COLS];
 
         // Create CUDA streams
         cudaStream_t stream1, stream2, stream3, stream4;
@@ -61,23 +52,17 @@ extern "C" {
         
         radial_gradient_convergence(d_gradient_col_interp, d_gradient_row_interp, d_magnified_image, rowsM, colsM, magnification, radius, sensitivity, doIntensityWeighting, d_rgc_map);
         
-        // Copy data from GPU to CPU
-        cudaMemcpy(rgc_map, d_rgc_map, MAX_ROWS * MAX_COLS * sizeof(float), cudaMemcpyDeviceToHost);
-
         cudaFree(d_magnified_image);
         cudaFree(d_gradient_col);
         cudaFree(d_gradient_row);
         cudaFree(d_gradient_col_interp);
         cudaFree(d_gradient_row_interp);
-        cudaFree(d_rgc_map);
-        cudaFree(d_image_in);
 
         // Destroy streams
         cudaStreamDestroy(stream1);
         cudaStreamDestroy(stream2);
         cudaStreamDestroy(stream3);
         cudaStreamDestroy(stream4);
-        return rgc_map;
     }
 }
 

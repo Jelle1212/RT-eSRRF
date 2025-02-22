@@ -3,6 +3,7 @@
 #include "shift_magnify.hu"
 #include "roberts_cross_gradients.hu"
 #include "radial_gradient_convergence.hu"
+#include "pipeline.hu"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -294,41 +295,27 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
         return;
     }
 
+    initPipeline(nFrames, rows, cols, magnification);
+    float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
+
     for (int frame = 0; frame < nFrames; frame++) {
         // Offset to process one frame at a time
         const float *input_frame = image_in + (frame * rows * cols);
-        float *output_frame = spatial(input_frame, rows, cols, shift, magnification, radius, sensitivity, doIntensityWeighting);
 
-        if (!output_frame) {
-            fprintf(stderr, "Error: spatial function returned NULL\n");
-            free(rgc_maps);
-            return;
-        }
-
-        // Copy processed frame into rgc_maps
-        memcpy(rgc_maps + (frame * rowsM * colsM), output_frame, rowsM * colsM * sizeof(float));
+        processFrame(input_frame, sr_image, frame, nFrames, rows, cols, magnification, shift, radius, sensitivity, doIntensityWeighting, temporalType);
     }
 
-    float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
     if (!sr_image) {
         fprintf(stderr, "Error: Memory allocation failed for rgc_maps\n");
         return;
     }
 
-    sr_image = temporal(rgc_maps, temporalType, nFrames, rowsM, colsM);
-    
-    if (!rgc_maps) {
-        fprintf(stderr, "Error: spatial function returned NULL\n");
-        free(rgc_maps);
-        return;
-    }
-
     // Save the image (we're saving the original image for testing)
-    // save_tiff(output_filename, rgc_maps, colsM, rowsM, nFrames);
     save_tiff(output_filename, sr_image, colsM, rowsM, 1);
 
     // Free the allocated memory
     free(rgc_maps);
+    deintPipeline();
 }
 
 
@@ -344,7 +331,7 @@ int main(int argc, char *argv[]) {
     float radius = 2.0;
     float sensitivity = 1.0;
     bool doIntensityWeighting = true;
-    int temporalType = 2;
+    int temporalType = 0;
 
     load_tiff_and_process(argv[1], argv[2], shift, magnification, radius, sensitivity, doIntensityWeighting, temporalType);
     compare_tiff_images(argv[2], argv[3]);

@@ -13,7 +13,10 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     int colsM = eSRRFParams->cols * eSRRFParams->magnification;
     int total_pixels = rowsM * colsM;
 
-    // CHECK_CUDA(cudaMalloc(&temporalParams.d_rgc_map, eSRRFParams->nFrames * total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&temporalParams.d_sum_x, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&temporalParams.d_sum_y, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&temporalParams.d_sum_xy, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&temporalParams.d_buffer, total_pixels * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&temporalParams.d_sr_image, total_pixels * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&temporalParams.d_mean_image, total_pixels * sizeof(float))); // Pre-allocated buffer
     CHECK_CUDA(cudaMalloc(&spatialParams.d_image_in, eSRRFParams->rows * eSRRFParams->cols * sizeof(float)));
@@ -33,6 +36,10 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     CHECK_CUDA(cudaStreamCreate(&stream4));
 
     // Initialize all allocated memory to 0.0
+    CHECK_CUDA(cudaMemset(temporalParams.d_sum_x, 0, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMemset(temporalParams.d_sum_y, 0, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMemset(temporalParams.d_sum_xy, 0, total_pixels * sizeof(float)));
+    CHECK_CUDA(cudaMemset(temporalParams.d_buffer, 0, total_pixels * sizeof(float)));
     CHECK_CUDA(cudaMemset(temporalParams.d_sr_image, 0, total_pixels * sizeof(float)));
     CHECK_CUDA(cudaMemset(temporalParams.d_mean_image, 0, total_pixels * sizeof(float))); 
     CHECK_CUDA(cudaMemset(spatialParams.d_image_in, 0, eSRRFParams->rows * eSRRFParams->cols * sizeof(float)));
@@ -62,7 +69,6 @@ extern "C" void processFrame(const float* image_in, float* sr_image, int frame_i
     int rowsM = spatialParams.rows * spatialParams.magnification;
     int colsM = spatialParams.cols * spatialParams.magnification;
     int total_pixels = rowsM * colsM;
-    // int buffer_offset = (frame_index % temporalParams.frames) * total_pixels;
 
     // Async Copy: Host to Device
     CHECK_CUDA(cudaMemcpyAsync(spatialParams.d_image_in, image_in, spatialParams.rows * spatialParams.cols * sizeof(float), cudaMemcpyHostToDevice, stream1));
@@ -70,10 +76,12 @@ extern "C" void processFrame(const float* image_in, float* sr_image, int frame_i
     // Spatial processing: directly writes to pre-allocated d_output_frame
     spatial(spatialParams);
 
-    // Async Copy: Device to Device
-    // CHECK_CUDA(cudaMemcpyAsync(temporalParams.d_rgc_maps + buffer_offset, spatialParams.d_rgc_map, total_pixels * sizeof(float), cudaMemcpyDeviceToDevice, stream3));
+    // Temporal processing
     temporal(temporalParams, spatialParams.d_rgc_map);
+
+    // Update frame index
     temporalParams.frame_idx++;
+
     // Trigger temporal processing only when buffer is full
     if (frame_index >= temporalParams.frames - 1) {
         CHECK_CUDA(cudaMemcpyAsync(sr_image, temporalParams.d_sr_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
@@ -86,11 +94,10 @@ extern "C" void deintPipeline() {
     CHECK_CUDA(cudaFree(spatialParams.d_gradient_row));
     CHECK_CUDA(cudaFree(spatialParams.d_gradient_col));
     CHECK_CUDA(cudaFree(spatialParams.d_magnified_image));
-    CHECK_CUDA(cudaFree(temporalParams.d_mean_image));
     CHECK_CUDA(cudaFree(spatialParams.d_rgc_map));
     CHECK_CUDA(cudaFree(spatialParams.d_image_in));
     CHECK_CUDA(cudaFree(temporalParams.d_sr_image));
-    // CHECK_CUDA(cudaFree(temporalParams.d_rgc_maps));
+    CHECK_CUDA(cudaFree(temporalParams.d_mean_image));
 
     CHECK_CUDA(cudaStreamDestroy(spatialParams.stream1));
     CHECK_CUDA(cudaStreamDestroy(spatialParams.stream2));

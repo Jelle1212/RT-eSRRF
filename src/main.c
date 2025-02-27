@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <tiffio.h>
 #include <string.h>
+#include <math.h>
 
 // Function to load a TIFF image into a float array
 float* load_tiff_image(const char *filename, int *width, int *height) {
@@ -110,7 +111,57 @@ float compute_ssim(const float *image1, const float *image2, int size) {
            ((mean1 * mean1 + mean2 * mean2 + C1) * (var1 + var2 + C2));
 }
 
-// Compare two TIFF images
+// Compute Peak Signal-to-Noise Ratio (PSNR)
+float compute_psnr(const float *image1, const float *image2, int size) {
+    float mse = compute_mse(image1, image2, size);
+    if (mse == 0) return INFINITY; // Perfect match
+
+    float max_pixel_value = 1.0f; // Assuming images are normalized to [0,1]
+    return 10.0f * log10((max_pixel_value * max_pixel_value) / mse);
+}
+
+// Compute Mean Absolute Error (MAE)
+float compute_mae(const float *image1, const float *image2, int size) {
+    float mae = 0.0f;
+    for (int i = 0; i < size; i++) {
+        mae += fabs(image1[i] - image2[i]);
+    }
+    return mae / size;
+}
+
+// Compute Maximum Absolute Error (MaxAE)
+float compute_maxae(const float *image1, const float *image2, int size) {
+    float max_error = 0.0f;
+    for (int i = 0; i < size; i++) {
+        float diff = fabs(image1[i] - image2[i]);
+        if (diff > max_error) max_error = diff;
+    }
+    return max_error;
+}
+
+// Compute Pearson Correlation Coefficient (PCC)
+float compute_pcc(const float *image1, const float *image2, int size) {
+    float mean1 = 0, mean2 = 0, sum1 = 0, sum2 = 0, sum_xy = 0;
+
+    for (int i = 0; i < size; i++) {
+        mean1 += image1[i];
+        mean2 += image2[i];
+    }
+    mean1 /= size;
+    mean2 /= size;
+
+    for (int i = 0; i < size; i++) {
+        float diff1 = image1[i] - mean1;
+        float diff2 = image2[i] - mean2;
+        sum1 += diff1 * diff1;
+        sum2 += diff2 * diff2;
+        sum_xy += diff1 * diff2;
+    }
+
+    return sum_xy / (sqrt(sum1) * sqrt(sum2) + 1e-10); // Adding epsilon to avoid division by zero
+}
+
+// Compare two TIFF images with additional metrics
 void compare_tiff_images(const char *generated_file, const char *ground_truth_file) {
     int width1, height1, width2, height2;
     float *image1 = load_tiff_image(generated_file, &width1, &height1);
@@ -129,12 +180,21 @@ void compare_tiff_images(const char *generated_file, const char *ground_truth_fi
     }
 
     size_t npixels = width1 * height1;
-    float mse = compute_mse(image1, image2, npixels);
-    float ssim = compute_ssim(image1, image2, npixels);
+    
+    float mse   = compute_mse(image1, image2, npixels);
+    float ssim  = compute_ssim(image1, image2, npixels);
+    float psnr  = compute_psnr(image1, image2, npixels);
+    float mae   = compute_mae(image1, image2, npixels);
+    float maxae = compute_maxae(image1, image2, npixels);
+    float pcc   = compute_pcc(image1, image2, npixels);
 
     printf("Comparison Results:\n");
     printf("  - MSE:  %.6f\n", mse);
     printf("  - SSIM: %.6f\n", ssim);
+    printf("  - PSNR: %.2f dB\n", psnr);
+    printf("  - MAE:  %.6f\n", mae);
+    printf("  - MaxAE: %.6f\n", maxae);
+    printf("  - PCC:  %.6f\n", pcc);
 
     free(image1);
     free(image2);
@@ -329,7 +389,6 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
     // Free the allocated memory
     free(rgc_maps);
-    deintPipeline();
 }
 
 
@@ -345,7 +404,7 @@ int main(int argc, char *argv[]) {
     float radius = 2.0;
     float sensitivity = 1.0;
     bool doIntensityWeighting = true;
-    int temporalType = 1;
+    int temporalType = 2;
 
     load_tiff_and_process(argv[1], argv[2], shift, magnification, radius, sensitivity, doIntensityWeighting, temporalType);
     compare_tiff_images(argv[2], argv[3]);

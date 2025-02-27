@@ -4,7 +4,7 @@ NVCC = nvcc
 
 # Compiler flags
 CFLAGS = -Wall -Iinclude
-NVCCFLAGS = -Iinclude
+NVCCFLAGS = -Iinclude -arch=sm_86
 
 # Directories
 SRC_DIR = src

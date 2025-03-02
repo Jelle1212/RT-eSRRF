@@ -7,7 +7,7 @@ DEFAULT_MAGNIFICATION=5.0
 DEFAULT_RADIUS=2.0
 DEFAULT_SENSITIVITY=1.0
 DEFAULT_DO_INTENSITY_WEIGHTING=1
-DEFAULT_TEMPORAL_TYPE=0
+DEFAULT_TEMPORAL_TYPE=2
 
 # Ensure at least 3 arguments (input, output, and ground truth)
 if [ "$#" -lt 3 ]; then
@@ -56,6 +56,8 @@ echo ""
 ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
+
+
 
 # Check if execution was successful
 if [ $? -ne 0 ]; then

@@ -13,8 +13,8 @@ extern "C" {
         int colsM = (int)(params.cols * params.magnification);
 
         // Call the shift_magnify function to apply shift and magnification
-        shift_magnify(params.d_image_in, params.d_magnified_image, params.rows, params.cols, params.shift, params.shift, params.magnification, params.magnification, params.stream1);
-        roberts_cross_gradients(params.d_image_in, params.d_gradient_col, params.d_gradient_row, params.rows, params.cols, params.stream2);
+        shift_magnify(params.d_n_image_in, params.d_magnified_image, params.rows, params.cols, params.shift, params.shift, params.magnification, params.magnification, params.stream1);
+        roberts_cross_gradients(params.d_n_image_in, params.d_gradient_col, params.d_gradient_row, params.rows, params.cols, params.stream2);
 
         // Synchronize streams to ensure both operations are complete
         cudaStreamSynchronize(params.stream2);

@@ -50,30 +50,40 @@ __global__ void shift_magnify_kernel(const float *image_in, float *image_out,
                                     int rows, int cols, 
                                     float shift_row, float shift_col, 
                                     float inv_magnification_row, float inv_magnification_col) {
-    int j = blockIdx.x * blockDim.x + threadIdx.x;
-    int i = blockIdx.y * blockDim.y + threadIdx.y;
+    int rowsM = (int)(rows / inv_magnification_row);
+    int colsM = (int)(cols / inv_magnification_col);
 
-    if (i < (int)(rows * inv_magnification_row) && j < (int)(cols * inv_magnification_col)) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x; // Column index
+    int i = blockIdx.y * blockDim.y + threadIdx.y; // Row index
+
+    if (i < rowsM && j < colsM) {
         float row = i * inv_magnification_row - shift_row;
         float col = j * inv_magnification_col - shift_col;
-        image_out[i * (int)(cols * inv_magnification_col) + j] = interpolate(image_in, row, col, rows, cols);
+        image_out[i * colsM + j] = interpolate(image_in, row, col, rows, cols);
     }
 }
-  
+
 extern "C" void shift_magnify(const float *image_in, float *image_out, 
                      int rows, int cols, float shift_row, float shift_col, 
                      float magnification_row, float magnification_col, cudaStream_t stream) {
 
+    int rowsM = (int)(rows * magnification_row);
+    int colsM = (int)(cols * magnification_col);
+
     float inv_magnification_row = 1.0f / magnification_row;
     float inv_magnification_col = 1.0f / magnification_col;
 
-    dim3 blockSize(16, 16);
-    dim3 gridSize((int)(cols * inv_magnification_col + 15) / 16, 
-                  (int)(rows * inv_magnification_row + 15) / 16);
+    // Define block and grid sizes
+    dim3 blockSize(16, 16); // 16x16 threads per block
+    dim3 gridSize((colsM + blockSize.x - 1) / blockSize.x, 
+                  (rowsM + blockSize.y - 1) / blockSize.y);
 
+    // Launch the CUDA kernel
     shift_magnify_kernel<<<gridSize, blockSize, 0, stream>>>(image_in, image_out, 
                                                             rows, cols, 
                                                             shift_row, shift_col, 
                                                             inv_magnification_row, inv_magnification_col);
-}
 
+    // Synchronize to ensure kernel execution is complete
+    cudaDeviceSynchronize();
+}

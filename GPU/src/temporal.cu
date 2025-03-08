@@ -19,25 +19,31 @@ __global__ void incremental_average_kernel(const float* d_rgc_map, float* d_mean
     d_mean_image[idx] = updated_mean;
 }
 
-__global__ void incremental_variance_kernel(const float* d_rgc_map, float* d_mean_image, float* d_var_image, int frame_idx, int total_pixels) {
+
+__global__ void incremental_variance_kernel(const float* d_rgc_map, float* d_mean_image, float* d_var_image, int frame_idx, int total_pixels, int total_frames) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < total_pixels) {
-        float new_pixel = d_rgc_map[idx];  // Current frame pixel value
-        float old_mean = d_mean_image[idx];  // Previous mean
-        float old_M2 = d_var_image[idx];    // Previous M2 sum
 
-        // Incremental mean update
-        float new_mean = old_mean + (new_pixel - old_mean) / (frame_idx + 1);
+    // Ensure we don’t access out-of-bounds memory
+    if (idx >= total_pixels) return;
 
-        // Incremental variance update (Welford's algorithm)
-        float delta = new_pixel - old_mean;
-        float new_M2 = old_M2 + delta * (new_pixel - new_mean);
+    float new_value = d_rgc_map[idx];  // Current frame pixel value
+    float old_mean = d_mean_image[idx];  // Previous mean
+    float old_M2 = d_var_image[idx];    // Previous M2 sum
 
-        // Update mean and M2
-        d_mean_image[idx] = new_mean;
-        d_var_image[idx] = new_M2;
+    // Incremental mean update
+    float new_mean = (frame_idx * old_mean + new_value) / (frame_idx + 1);
 
-        d_var_image[idx] = new_M2 / (frame_idx + 1);
+    // Incremental variance update (Welford's algorithm)
+    float delta = new_value - old_mean;
+    float new_M2 = old_M2 + delta * (new_value - new_mean);
+
+    // Update mean and M2
+    d_mean_image[idx] = new_mean;
+    d_var_image[idx] = new_M2;
+
+    // Compute the var if we are at the last frame
+    if (frame_idx + 1 == total_frames) {
+        d_var_image[idx] = new_M2 / total_frames;
     }
 }
 
@@ -99,14 +105,18 @@ extern "C" {
         if (params.type == 0) {
             incremental_average_kernel<<<gridSize, blockSize>>>(d_rgc_map, params.d_sr_image, params.frame_idx, total_pixels);
         } else if (params.type == 1) {
-            incremental_variance_kernel<<<gridSize, blockSize>>>(d_rgc_map, params.d_mean_image, params.d_sr_image, params.frame_idx, total_pixels);
+            incremental_variance_kernel<<<gridSize, blockSize>>>(d_rgc_map, params.d_mean_image, params.d_sr_image, params.frame_idx, total_pixels, params.frames);
         } else if (params.type == 2){
             incremental_autocorrelation_kernel<<<gridSize, blockSize>>>(
-                d_rgc_map, params.d_sr_image, params.d_mean_image, params.d_buffer, params.d_sum_x, params.d_sum_y, params.d_sum_xy, total_pixels, params.frame_idx, 50
+                d_rgc_map, params.d_sr_image, params.d_mean_image, params.d_buffer, params.d_sum_x, params.d_sum_y, params.d_sum_xy, total_pixels, params.frame_idx, params.frames
             );
         } else {
             printf("ERROR: Unsupported Temporal Type: %d\n", params.type);
             return;
         }
+        // Synchronize to ensure kernel execution is complete
+        cudaDeviceSynchronize();
+        // convert_double_to_float<<<gridSize, blockSize>>>(params.d_mean_image, params.d_sr_image, total_pixels);
+
     }
 }

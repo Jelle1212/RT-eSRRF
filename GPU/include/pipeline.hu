@@ -28,7 +28,7 @@ extern "C" {
         int temporalType;
     };
     void initPipeline(const struct ESRRFParams* eSRRFParams);
-    void processFrame(const float* image_in, float* sr_image, int frame_index);     
+    void processFrame(const unsigned short* image_in, float* sr_image, int frame_index);     
     void deintPipeline();
 #ifdef __cplusplus
 }

@@ -37,4 +37,7 @@ extern "C" void roberts_cross_gradients(const float *image, float *gradient_col,
 
     // Launch the CUDA kernel
     roberts_cross_kernel<<<gridSize, blockSize, 0, stream>>>(image, gradient_col, gradient_row, rows, cols);
+    
+    // Synchronize to ensure kernel execution is complete
+    cudaDeviceSynchronize();
 }

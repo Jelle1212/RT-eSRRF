@@ -7,8 +7,7 @@
 extern "C" {
 #endif
     struct TemporalParams {
-        float *d_sr_image;
-        float *d_mean_image;
+        float *d_sr_image, *d_mean_image;;
         float *d_buffer;
         float *d_sum_x, *d_sum_y, *d_sum_xy;
         int rowsM, colsM, type, frame_idx, frames;

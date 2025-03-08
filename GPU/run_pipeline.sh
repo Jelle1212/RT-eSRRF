@@ -53,11 +53,13 @@ echo "  Temporal Type: $TEMPORAL_TYPE"
 echo ""
 
 # Run CUDA pipeline
+# ncu ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
+#     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
+#     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
+
 ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
-
-
 
 # Check if execution was successful
 if [ $? -ne 0 ]; then

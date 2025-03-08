@@ -1,13 +1,60 @@
 #include "pipeline.hu"
+#include "imagestack.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <tiffio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 
-// Function to load a TIFF image into a float array
-float* load_tiff_image(const char *filename, int *width, int *height) {
+// Define a small tolerance value
+#define TOLERANCE 1e-6
+
+void test_image_stack() {
+    int rows = 2, cols = 3;
+
+    // Create an ImageStack
+    ImageStack* stack = createImageStack(rows, cols);
+    assert(stack != NULL);
+    printf("✅ ImageStack created successfully.\n");
+
+    // Create test images
+    float image1[6] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6};
+    float image2[6] = {1.1, 1.2, 1.3, 1.4, 1.5, 1.6};
+
+    // Push images onto the stack
+    pushImage(stack, image1);
+    pushImage(stack, image2);
+    assert(stack->stack_size == 2);
+    printf("✅ Images pushed successfully. Stack size: %d\n", stack->stack_size);
+
+    // Pop an image from the stack
+    float* poppedImage = popImage(stack);
+    assert(poppedImage != NULL);
+    assert(fabs(poppedImage[0] - 1.1) < TOLERANCE);
+    assert(fabs(poppedImage[5] - 1.6) < TOLERANCE);
+    printf("✅ Popped image has expected values.\n");
+    free(poppedImage); // Free popped image
+
+    // Check stack size after popping
+    assert(stack->stack_size == 1);
+    printf("✅ Stack size is correct after pop: %d\n", stack->stack_size);
+
+    // Save images as TIFF (optional test)
+    saveAsTiffFloat32("test_output_float32.tiff", stack);
+    saveAsTiff16("test_output_16bit.tiff", stack);
+    printf("✅ TIFF files saved successfully.\n");
+
+    // Free stack
+    freeImageStack(stack);
+    printf("✅ ImageStack freed successfully.\n");
+
+    printf("\n🎉 All tests passed!\n");
+}
+
+// Function to load all frames from a multi-frame TIFF into a float array
+float* load_tiff_image_stack(const char *filename, int *width, int *height, int *nFrames) {
     // Open the TIFF file
     TIFF *tif = TIFFOpen(filename, "r");
     if (!tif) {
@@ -15,58 +62,63 @@ float* load_tiff_image(const char *filename, int *width, int *height) {
         return NULL;
     }
 
-    // Reset to the first frame
-    TIFFSetDirectory(tif, 0);
-
-    // Get image dimensions from the first frame
+    // Get the first frame's dimensions
     TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, width);
     TIFFGetField(tif, TIFFTAG_IMAGELENGTH, height);
 
-    size_t npixels = (*width) * (*height);
+    size_t npixels = (*width) * (*height);  // Number of pixels per frame
+
+    // Count the number of frames
+    *nFrames = 0;
+    do { (*nFrames)++; } while (TIFFReadDirectory(tif));
 
     // Allocate memory for all frames
-    float *image_in = (float *)malloc(npixels * sizeof(float));
-
-    if (!image_in) {
-        fprintf(stderr, "Error: Memory allocation failed for image data\n");
+    float *imageStack = (float *)malloc((*nFrames) * npixels * sizeof(float));
+    if (!imageStack) {
+        fprintf(stderr, "Error: Memory allocation failed for image stack\n");
         TIFFClose(tif);
         return NULL;
     }
 
-    // Allocate memory for the raster buffer (uint16_t since TIFF images are often 16-bit)
+    // Reset to the first frame
+    TIFFSetDirectory(tif, 0);
+
+    // Allocate memory for a single frame raster buffer
     uint16_t *raster = (uint16_t *)_TIFFmalloc(npixels * sizeof(uint16_t));
     if (!raster) {
         fprintf(stderr, "Error: Memory allocation failed for raster\n");
-        free(image_in);
+        free(imageStack);
         TIFFClose(tif);
         return NULL;
     }
 
-    // Read each scanline of the image (assuming only one frame)
-    for (uint32_t row = 0; row < *height; row++) {
-        if (TIFFReadScanline(tif, &raster[row * (*width)], row, 0) != 1) {
-            fprintf(stderr, "Error: Could not read scanline %d\n", row);
-            _TIFFfree(raster);
-            free(image_in);
-            TIFFClose(tif);
-            return NULL;
+    // Load all frames
+    for (int frame = 0; frame < *nFrames; frame++) {
+        TIFFSetDirectory(tif, frame);  // Move to the current frame
+
+        // Read the entire image into the raster buffer
+        for (uint32_t row = 0; row < *height; row++) {
+            if (TIFFReadScanline(tif, &raster[row * (*width)], row, 0) != 1) {
+                fprintf(stderr, "Error: Could not read scanline %d in frame %d\n", row, frame);
+                _TIFFfree(raster);
+                free(imageStack);
+                TIFFClose(tif);
+                return NULL;
+            }
+        }
+
+        // Convert 16-bit raster data to normalized float grayscale and store in imageStack
+        for (size_t i = 0; i < npixels; i++) {
+            imageStack[frame * npixels + i] = (float)raster[i] / 65535.0f;  // Normalize to [0, 1]
         }
     }
 
-    // Convert 16-bit raster data to normalized float grayscale and store in image_in
-    for (size_t i = 0; i < npixels; i++) {
-        image_in[i] = (float)raster[i] / 65535.0f;  // Normalize to [0, 1]
-    }
-
-    // Free the raster buffer after processing
+    // Free resources
     _TIFFfree(raster);
-
-    // Close the TIFF file
     TIFFClose(tif);
 
-    printf("Successfully loaded image from TIFF\n");
-    // Return the processed image
-    return image_in;
+    printf("Successfully loaded %d frames from TIFF file %s\n", *nFrames, filename);
+    return imageStack;
 }
 
 // Compute Mean Squared Error (MSE)
@@ -157,106 +209,52 @@ float compute_pcc(const float *image1, const float *image2, int size) {
     return sum_xy / (sqrt(sum1) * sqrt(sum2) + 1e-10); // Adding epsilon to avoid division by zero
 }
 
-// Compare two TIFF images with additional metrics
-void compare_tiff_images(const char *generated_file, const char *ground_truth_file) {
-    int width1, height1, width2, height2;
-    float *image1 = load_tiff_image(generated_file, &width1, &height1);
-    float *image2 = load_tiff_image(ground_truth_file, &width2, &height2);
+void compare_tiff_image_stacks(const char *generated_file, const char *ground_truth_file) {
+    int width1, height1, width2, height2, nFrames1, nFrames2;
+    float *imageStack1 = load_tiff_image_stack(generated_file, &width1, &height1, &nFrames1);
+    float *imageStack2 = load_tiff_image_stack(ground_truth_file, &width2, &height2, &nFrames2);
 
-    if (!image1 || !image2) {
-        fprintf(stderr, "Error: Could not load images for comparison\n");
+    if (!imageStack1 || !imageStack2) {
+        fprintf(stderr, "Error: Could not load image stacks for comparison\n");
         return;
     }
 
-    if (width1 != width2 || height1 != height2) {
+    if (width1 != width2 || height1 != height2 || nFrames1 != nFrames2) {
         fprintf(stderr, "Error: Image dimensions do not match!\n");
-        free(image1);
-        free(image2);
+        free(imageStack1);
+        free(imageStack2);
         return;
     }
+
+    int nFrames = nFrames1;
 
     size_t npixels = width1 * height1;
+
+    printf("Frame-wise Comparison Results:\n");
     
-    float mse   = compute_mse(image1, image2, npixels);
-    float ssim  = compute_ssim(image1, image2, npixels);
-    float psnr  = compute_psnr(image1, image2, npixels);
-    float mae   = compute_mae(image1, image2, npixels);
-    float maxae = compute_maxae(image1, image2, npixels);
-    float pcc   = compute_pcc(image1, image2, npixels);
-
-    printf("Comparison Results:\n");
-    printf("  - MSE:  %.6f\n", mse);
-    printf("  - SSIM: %.6f\n", ssim);
-    printf("  - PSNR: %.2f dB\n", psnr);
-    printf("  - MAE:  %.6f\n", mae);
-    printf("  - MaxAE: %.6f\n", maxae);
-    printf("  - PCC:  %.6f\n", pcc);
-
-    free(image1);
-    free(image2);
-}
-
-void save_tiff(const char *filename, const float *image, uint32_t width, uint32_t height, int nFrames) {
-    TIFF *out = TIFFOpen(filename, "w");
-    if (!out) {
-        fprintf(stderr, "Error: Could not open output TIFF file %s\n", filename);
-        return;
-    }
-
-    uint16_t *row_buffer = (uint16_t *)malloc(width * sizeof(uint16_t));
-    if (!row_buffer) {
-        fprintf(stderr, "Error: Memory allocation failed for row buffer\n");
-        TIFFClose(out);
-        return;
-    }
-
-    // Check if the image contains negative values
-    bool has_negatives = false;
-    for (uint32_t i = 0; i < width * height * nFrames; i++) {
-        if (image[i] < 0) {
-            has_negatives = true;
-            break;
-        }
-    }
-
     for (int frame = 0; frame < nFrames; frame++) {
-        TIFFSetField(out, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(out, TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 16);
-        TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, width));
-        TIFFSetField(out, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
-        TIFFSetField(out, TIFFTAG_PAGENUMBER, frame, nFrames); // Page index
+        float *image1 = imageStack1 + (frame * npixels);
+        float *image2 = imageStack2 + (frame * npixels);
 
-        // Write image data for this frame
-        const float *frame_data = image + (frame * width * height); // Offset for each frame
-        for (uint32_t row = 0; row < height; row++) {
-            for (uint32_t col = 0; col < width; col++) {
-                float value = frame_data[row * width + col];
+        float mse   = compute_mse(image1, image2, npixels);
+        float ssim  = compute_ssim(image1, image2, npixels);
+        float psnr  = compute_psnr(image1, image2, npixels);
+        float mae   = compute_mae(image1, image2, npixels);
+        float maxae = compute_maxae(image1, image2, npixels);
+        float pcc   = compute_pcc(image1, image2, npixels);
 
-                if (has_negatives) {
-                    // Scale from [-1,1] to [0,1]
-                    value = (value + 1.0f) / 2.0f;
-                }
-
-                // Convert to uint16_t with clamping
-                float scaled_value = value * 65535.0f;
-                if (scaled_value < 0) scaled_value = 0;
-                if (scaled_value > 65535) scaled_value = 65535;
-
-                row_buffer[col] = (uint16_t)scaled_value;            
-            }
-            TIFFWriteScanline(out, row_buffer, row, 0);
-        }
-
-        TIFFWriteDirectory(out); // Move to the next image (multi-frame TIFF)
+        printf("Frame %d:\n", frame);
+        printf("  - MSE:  %.6f\n", mse);
+        printf("  - SSIM: %.6f\n", ssim);
+        printf("  - PSNR: %.2f dB\n", psnr);
+        printf("  - MAE:  %.6f\n", mae);
+        printf("  - MaxAE: %.6f\n", maxae);
+        printf("  - PCC:  %.6f\n", pcc);
     }
 
-    free(row_buffer);
-    TIFFClose(out);
-    printf("Saved %d-frame TIFF to %s\n", nFrames, filename);
+    free(imageStack1);
+    free(imageStack2);
 }
-
 
 void load_tiff_and_process(const char *input_filename, const char *output_filename, struct ESRRFParams *eSRRFParams) {
     // Open the TIFF file
@@ -285,7 +283,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     npixels = width * height;
 
     // Allocate memory for all frames
-    float *image_in = (float *)malloc(nFrames * npixels * sizeof(float));
+    uint16_t *image_in = (uint16_t *)malloc(nFrames * npixels * sizeof(uint16_t));
     if (!image_in) {
         fprintf(stderr, "Error: Memory allocation failed for all frames\n");
         TIFFClose(tif);
@@ -316,7 +314,7 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
         // Convert 16-bit image to normalized float grayscale and store in `image_in`
         for (size_t i = 0; i < npixels; i++) {
-            image_in[frame * npixels + i] = (float)raster[i] / 65535.0f;  // Normalize to [0,1]
+            image_in[frame * npixels + i] = raster[i];  // Normalize to [0,1]
         }
 
         // Free raster buffer
@@ -342,18 +340,29 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     int colsM = (int)(eSRRFParams->cols * eSRRFParams->magnification);
 
     initPipeline(eSRRFParams);
-    float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
+    // float *sr_image = (float *)malloc(rowsM * colsM * eSRRFParams->nFrames * sizeof(float));
+
+    // Create stack and push image
+    ImageStack* stack = createImageStack(rowsM, colsM);
+    // ImageStack* stack = createImageStack(height, width);
+
+    if (!stack) {
+        return;
+    }
+
     // Create CUDA events for profiling
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
+    
+    float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
 
     // Variable to accumulate total time
     float total_time = 0.0f;
 
     for (int frame = 0; frame < eSRRFParams->nFrames; frame++) {
         // Offset to process one frame at a time
-        const float *input_frame = image_in + (frame * eSRRFParams->rows * eSRRFParams->cols);
+        const unsigned short *input_frame = image_in + (frame * eSRRFParams->rows * eSRRFParams->cols);
         // Record the start event
         cudaEventRecord(start, 0);
         
@@ -368,11 +377,9 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
         // Accumulate total time
         total_time += milliseconds;
-
         // Print time for this frame (optional)
         printf("Frame %d time: %.2f ms\n", frame, milliseconds);
     }
-
     // Compute and print the average time per frame
     float average_time = total_time / eSRRFParams->nFrames;
     printf("Total time for %d frames: %.2f ms\n", eSRRFParams->nFrames, total_time);
@@ -387,11 +394,15 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
         return;
     }
 
+    pushImage(stack, sr_image);
+
     // Save the image (we're saving the original image for testing)
-    save_tiff(output_filename, sr_image, colsM, rowsM, 1);
+    saveAsTiff16(output_filename, stack);
 
     // Free the allocated memory
     deintPipeline();
+    freeImageStack(stack);
+    free(sr_image);
 }
 
 
@@ -412,9 +423,9 @@ int main(int argc, char *argv[]) {
         .doIntensityWeighting = atoi(argv[9]), 
         .temporalType = atoi(argv[10])
     };
-
+    // test_image_stack();
     load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
-    compare_tiff_images(argv[2], argv[3]);
+    compare_tiff_image_stacks(argv[2], argv[3]);
 
     return 0;
 }

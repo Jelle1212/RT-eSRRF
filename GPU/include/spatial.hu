@@ -5,12 +5,14 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>  // For uint16_t
 
 #ifdef __cplusplus
 extern "C" {
 #endif
     struct SpatialParams {
-        float *d_image_in;
+        unsigned short *d_image_in;
+        float *d_n_image_in;
         float *d_rgc_map;
         float *d_magnified_image;
         float *d_gradient_col;

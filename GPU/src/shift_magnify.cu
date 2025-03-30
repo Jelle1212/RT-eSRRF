@@ -3,16 +3,21 @@
 #include <stdio.h>
 #include <math.h>
 
-////////////////////////////////////////////////////////////////////////////////
-// Cubic convolution kernel (using a = 0.5)
-////////////////////////////////////////////////////////////////////////////////
 __device__ float cubic(float v) {
     const float a = 0.5f;
-    float v_abs = fabsf(v);
-    float v2 = v_abs * v_abs;
-    float v3 = v2 * v_abs;
-    return (v_abs < 1.0f) * (v3 * (-a + 2.0f) + v2 * (a - 3.0f) + 1.0f) +
-           (v_abs >= 1.0f && v_abs < 2.0f) * (v3 * (-a) + v2 * (5.0f * a) - v_abs * (8.0f * a) + (4.0f * a));
+    const float v_abs = fabsf(v);
+    const float v2 = v_abs * v_abs;
+    const float v3 = v2 * v_abs;
+
+    float w0 = 0.0f, w1 = 0.0f;
+
+    if (v_abs < 1.0f) {
+        w0 = fmaf(v3, (-a + 2.0f), fmaf(v2, (a - 3.0f), 1.0f));
+    } else if (v_abs < 2.0f) {
+        w1 = fmaf(v3, (-a), fmaf(v2, (5.0f * a), fmaf(-v_abs, (8.0f * a), (4.0f * a))));
+    }
+
+    return w0 + w1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

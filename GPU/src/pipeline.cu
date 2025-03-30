@@ -85,7 +85,7 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     temporalParams.frames = eSRRFParams->nFrames;
     temporalParams.frame_idx = 0;
 
-    // initialize_lut();
+    initialize_lut();
 }
 
 extern "C" void processFrame(const unsigned short* image_in, float* sr_image, int frame_index) {
@@ -111,14 +111,14 @@ extern "C" void processFrame(const unsigned short* image_in, float* sr_image, in
     spatial(spatialParams);
 
     // Temporal processing
-    // temporal(temporalParams, spatialParams.d_rgc_map);
+    temporal(temporalParams, spatialParams.d_rgc_map);
 
     // Update frame index
     temporalParams.frame_idx++;
 
     // Trigger temporal processing only when buffer is full
     if (frame_index >= temporalParams.frames - 1) {
-        CHECK_CUDA(cudaMemcpyAsync(sr_image, spatialParams.d_magnified_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
+        CHECK_CUDA(cudaMemcpyAsync(sr_image, temporalParams.d_sr_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
         // Ensure synchronization on stream4
         CHECK_CUDA(cudaStreamSynchronize(stream4));  // Synchronize stream4, making sure memory is copied to host
     }

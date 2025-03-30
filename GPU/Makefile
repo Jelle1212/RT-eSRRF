@@ -4,7 +4,7 @@ NVCC = nvcc
 
 # Compiler flags
 CFLAGS = -Wall -Iinclude
-NVCCFLAGS = -std=c++17 -Iinclude -arch=sm_86 
+NVCCFLAGS = -std=c++17 -Iinclude -arch=sm_86 -use_fast_math -maxrregcount=32
 
 # Directories
 SRC_DIR = src

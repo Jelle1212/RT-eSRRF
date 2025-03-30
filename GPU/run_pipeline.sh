@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Default values
-DEFAULT_NFRAMES=50
+DEFAULT_NFRAMES=1
 DEFAULT_SHIFT=0.0
 DEFAULT_MAGNIFICATION=5.0
 DEFAULT_RADIUS=2.0
 DEFAULT_SENSITIVITY=1.0
 DEFAULT_DO_INTENSITY_WEIGHTING=1
-DEFAULT_TEMPORAL_TYPE=2
+DEFAULT_TEMPORAL_TYPE=1
 
 # Ensure at least 3 arguments (input, output, and ground truth)
 if [ "$#" -lt 3 ]; then
@@ -53,9 +53,17 @@ echo "  Temporal Type: $TEMPORAL_TYPE"
 echo ""
 
 # Run CUDA pipeline
-# ncu ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
+# nsys profile -o my_profile_report ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
 #     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
 #     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
+
+# nsys-ui my_profile_report.nsys-rep
+
+# ncu -f -o detailed_kernel_report ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
+#     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
+#     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
+
+# ncu-ui detailed_kernel_report.ncu-rep
 
 ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \

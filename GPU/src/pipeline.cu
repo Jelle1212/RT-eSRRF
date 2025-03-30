@@ -1,6 +1,7 @@
 #include "pipeline.hu"
 #include "spatial.hu"
 #include "temporal.hu"
+#include "shift_magnify.hu"
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <cstdint>
@@ -23,7 +24,7 @@ extern "C" void launchNormalizationKernel(const unsigned short* d_input, float* 
     dim3 blockSize(16, 16);
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
     
-    normalizeUint16ToFloat<<<gridSize, blockSize,0, stream>>>(d_input, d_output, width, height, max_value);
+    normalizeUint16ToFloat<<<gridSize, blockSize, 0, stream>>>(d_input, d_output, width, height, max_value);
 }
 
 extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
@@ -83,6 +84,8 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     temporalParams.type = eSRRFParams->temporalType;
     temporalParams.frames = eSRRFParams->nFrames;
     temporalParams.frame_idx = 0;
+
+    // initialize_lut();
 }
 
 extern "C" void processFrame(const unsigned short* image_in, float* sr_image, int frame_index) {
@@ -103,18 +106,19 @@ extern "C" void processFrame(const unsigned short* image_in, float* sr_image, in
 
     // Ensure synchronization if needed
     CHECK_CUDA(cudaStreamSynchronize(stream2));
+    
     // Spatial processing: directly writes to pre-allocated d_output_frame
     spatial(spatialParams);
 
     // Temporal processing
-    temporal(temporalParams, spatialParams.d_rgc_map);
+    // temporal(temporalParams, spatialParams.d_rgc_map);
 
     // Update frame index
     temporalParams.frame_idx++;
 
     // Trigger temporal processing only when buffer is full
     if (frame_index >= temporalParams.frames - 1) {
-        CHECK_CUDA(cudaMemcpyAsync(sr_image, temporalParams.d_sr_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
+        CHECK_CUDA(cudaMemcpyAsync(sr_image, spatialParams.d_magnified_image, total_pixels * sizeof(float), cudaMemcpyDeviceToHost, stream4));
         // Ensure synchronization on stream4
         CHECK_CUDA(cudaStreamSynchronize(stream4));  // Synchronize stream4, making sure memory is copied to host
     }

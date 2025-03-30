@@ -84,8 +84,6 @@ extern "C" void initPipeline(const struct ESRRFParams* eSRRFParams) {
     temporalParams.type = eSRRFParams->temporalType;
     temporalParams.frames = eSRRFParams->nFrames;
     temporalParams.frame_idx = 0;
-
-    initialize_lut();
 }
 
 extern "C" void processFrame(const unsigned short* image_in, float* sr_image, int frame_index) {

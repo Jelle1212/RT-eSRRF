@@ -7,6 +7,17 @@
 extern "C" {
 #endif
 // Function declaration for the host function
+
+#define LUT_SIZE 1024
+#define LUT_MIN -2.0f
+#define LUT_MAX  2.0f
+#define SCALE (LUT_SIZE - 1) / (LUT_MAX - LUT_MIN)
+
+// Host code to precompute LUT
+__constant__ float lut_constant[LUT_SIZE];
+
+float cubic(float v);
+void initialize_lut();
 void shift_magnify(const float *image_in, float *image_out, 
                      int rows, int cols, float shift_row, float shift_col, 
                      float magnification_row, float magnification_col, cudaStream_t stream);

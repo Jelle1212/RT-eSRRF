@@ -171,9 +171,6 @@ __global__ void shift_magnify_kernel(const float *__restrict__ image_in, float *
             tile[local_i][local_j] = 0.0f; // Zero-padding for out-of-bounds values
     }
 
-    // for (int i = threadIdx.x; i < LUT_SIZE; i+= blockDim.x) {
-    //     lut_smem[i] = __ldg(&lut_constant[i]);
-    // }
     __syncthreads();
 
     // if (blockIdx.x == 1 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {

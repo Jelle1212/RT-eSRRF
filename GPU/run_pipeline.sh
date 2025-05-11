@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default values
-DEFAULT_NFRAMES=1
+DEFAULT_NFRAMES=10
 DEFAULT_SHIFT=0.0
 DEFAULT_MAGNIFICATION=5.0
 DEFAULT_RADIUS=2.0
@@ -59,15 +59,15 @@ echo ""
 
 # nsys-ui my_profile_report.nsys-rep
 
-ncu -f -o detailed_kernel_report ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
-    "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
-    "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
-
-ncu-ui detailed_kernel_report.ncu-rep
-
-# ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
+# ncu -f -o detailed_kernel_report ./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
 #     "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
 #     "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
+
+# ncu-ui detailed_kernel_report.ncu-rep
+
+./ESRRF_GPU "$INPUT_TIFF" "$OUTPUT_TIFF" "$OUTPUT_GT_TIFF" \
+    "$NFRAMES" "$SHIFT" "$MAGNIFICATION" \
+    "$RADIUS" "$SENSITIVITY" "$DO_INTENSITY_WEIGHTING" "$TEMPORAL_TYPE"
 
 # Check if execution was successful
 if [ $? -ne 0 ]; then

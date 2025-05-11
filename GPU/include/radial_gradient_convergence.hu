@@ -6,7 +6,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    __constant__ int d_offsets[100];
     void radial_gradient_convergence(const float *gradient_col_interp, const float *gradient_row_interp, const float *image_interp, int rowsM, int colsM, int magnification, float radius, float sensitivity, int doIntensityWeighting, float *rgc_map);     
 
 #ifdef __cplusplus

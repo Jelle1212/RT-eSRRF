@@ -405,6 +405,98 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     free(sr_image);
 }
 
+#define NUM_FRAMES 100
+#define CSV_FILE "latency_results.csv"
+
+void testPerformanceOverSizes(struct ESRRFParams *eSRRFParams) {
+    FILE *csv = fopen(CSV_FILE, "w");
+    if (!csv) {
+        perror("Could not open CSV file");
+        return;
+    }
+
+    fprintf(csv, "Width,Height,AverageTime_ms,Variance_ms2\n");
+
+    int sizes[] = {128, 256, 512, 1024, 2048};
+    int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
+
+    for (int i = 0; i < num_sizes; ++i) {
+        int width = sizes[i];
+        int height = sizes[i];
+        int num_pixels = width * height;
+
+        eSRRFParams->cols = width;
+        eSRRFParams->rows = height;
+
+        eSRRFParams->nFrames = NUM_FRAMES;
+        int rowsM = (int)(eSRRFParams->rows * eSRRFParams->magnification);
+        int colsM = (int)(eSRRFParams->cols * eSRRFParams->magnification);
+
+        printf("Testing size: %dx%d\n", width, height);
+
+        // Allocate input
+        unsigned short *image_in = (unsigned short *)malloc(num_pixels * sizeof(unsigned short));
+        float *sr_image = (float *)malloc(rowsM * colsM * sizeof(float));
+
+        // Fill image with dummy data
+        for (int j = 0; j < num_pixels; ++j) {
+            image_in[j] = (unsigned short)(j % 65535);
+        }
+
+        // Setup CUDA events
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
+        float times[NUM_FRAMES];
+        float total_time = 0.0f;
+
+        initPipeline(eSRRFParams);
+
+        printf("Warming up GPU...\n");
+        for (int warm = 0; warm < 5; ++warm) {
+            processFrame(image_in, sr_image, warm);  // Warm-up run, not timed
+        }
+        cudaDeviceSynchronize();  // Ensure all GPU work is done before timing
+
+        for (int frame = 0; frame < NUM_FRAMES; ++frame) {            
+            cudaEventRecord(start, 0);
+            processFrame(image_in, sr_image, frame);
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(stop);
+
+            float milliseconds = 0.0f;
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            times[frame] = milliseconds;
+            total_time += milliseconds;
+        }
+
+        // Compute average
+        float average = total_time / NUM_FRAMES;
+
+        // Compute variance
+        float variance = 0.0f;
+        for (int j = 0; j < NUM_FRAMES; ++j) {
+            float diff = times[j] - average;
+            variance += diff * diff;
+        }
+        variance /= NUM_FRAMES;
+
+        // Write to CSV
+        fprintf(csv, "%d,%d,%.4f,%.4f\n", width, height, average, variance);
+
+        // Clean up
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        free(image_in);
+        free(sr_image);
+        deintPipeline();
+    }
+    fclose(csv);
+    printf("Results saved to %s\n", CSV_FILE);
+}
+
+
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
@@ -424,8 +516,8 @@ int main(int argc, char *argv[]) {
         .temporalType = atoi(argv[10])
     };
     // test_image_stack();
-    load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
-    compare_tiff_image_stacks(argv[2], argv[3]);
-
+    // load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
+    // compare_tiff_image_stacks(argv[2], argv[3]);
+    testPerformanceOverSizes(&eSRRFParams);
     return 0;
 }

@@ -2,3 +2,5 @@
 build/
 *.tif
 output.tif
+ESRRF/
+.ipynb_checkpoints

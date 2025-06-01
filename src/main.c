@@ -342,7 +342,6 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     // Now, use the shift_magnify function on the first image
     int rows = height;
     int cols = width;
-    nFrames = 50;  // We are processing only the first image (frame)
     
     // Allocate memory for the output image
     int rowsM = (int)(rows * magnification);

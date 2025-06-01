@@ -94,11 +94,6 @@ extern "C" void processFrame(const unsigned short* image_in, float* sr_image, in
     // int colsM = spatialParams.cols * 1;
     int total_pixels = rowsM * colsM;
 
-    if (image_in != NULL) {
-        printf("image_in is NULL.\n");
-        return;
-    }
-
     // Async Copy: Host to Device
     CHECK_CUDA(cudaMemcpyAsync(spatialParams.d_image_in, image_in, spatialParams.rows * spatialParams.cols * sizeof(unsigned short), cudaMemcpyHostToDevice, stream1));
     
@@ -106,16 +101,16 @@ extern "C" void processFrame(const unsigned short* image_in, float* sr_image, in
     CHECK_CUDA(cudaStreamSynchronize(stream1));
 
     // Normalize input image
-    // launchNormalizationKernel(spatialParams.d_image_in, spatialParams.d_n_image_in, spatialParams.rows, spatialParams.cols, UINT16_MAX, stream2);
+    launchNormalizationKernel(spatialParams.d_image_in, spatialParams.d_n_image_in, spatialParams.rows, spatialParams.cols, UINT16_MAX, stream2);
 
-    // // Ensure synchronization if needed
-    // CHECK_CUDA(cudaStreamSynchronize(stream2));
+    // Ensure synchronization if needed
+    CHECK_CUDA(cudaStreamSynchronize(stream2));
     
-    // // Spatial processing: directly writes to pre-allocated d_output_frame
-    // spatial(spatialParams);
+    // Spatial processing: directly writes to pre-allocated d_output_frame
+    spatial(spatialParams);
 
-    // // Temporal processing
-    // temporal(temporalParams, spatialParams.d_rgc_map);
+    // Temporal processing
+    temporal(temporalParams, spatialParams.d_rgc_map);
 
     // Update frame index
     temporalParams.frame_idx++;

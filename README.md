@@ -1,3 +1,4 @@
+# Real-Time CUDA-Optimized eSRRF
 This project is a CUDA-accelerated implementation of **eSRRF** (enhanced Super-Resolution Radial Fluctuations), a widely used algorithm for live-cell super-resolution microscopy. The goal was to reduce latency and computational overhead to enable **real-time super-resolved imaging**—useful for live feedback, microscope tuning, and high-throughput analysis.
 
 ## About the Project

@@ -19,3 +19,6 @@ The optimized implementation achieves significant speedups compared to the defau
 
 > Benchmarked on an NVIDIA RTX 3090 
   Parameters: magnification = 5, radius = 2, sensitivity = 1, weighting = 1, temporal type = TAC2
+
+## License
+MIT License

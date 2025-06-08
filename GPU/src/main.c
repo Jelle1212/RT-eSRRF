@@ -359,14 +359,14 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
 
     // Variable to accumulate total time
     float total_time = 0.0f;
-
-    for (int frame = 0; frame < eSRRFParams->nFrames; frame++) {
+    bool new_SR = false;
+    for (int frame = 0; frame < nFrames; frame++) {
         // Offset to process one frame at a time
         const unsigned short *input_frame = image_in + (frame * eSRRFParams->rows * eSRRFParams->cols);
         // Record the start event
         cudaEventRecord(start, 0);
         
-        processFrame(input_frame, sr_image, frame);
+        new_SR = processFrame(input_frame, sr_image, frame);
 
         cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);  // Ensure all GPU work is done
@@ -379,6 +379,14 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
         total_time += milliseconds;
         // Print time for this frame (optional)
         printf("Frame %d time: %.2f ms\n", frame, milliseconds);
+
+        if (new_SR) {
+            if (!sr_image) {
+                fprintf(stderr, "Error: Memory allocation failed for rgc_maps\n");
+                break;
+            }
+            pushImage(stack, sr_image);
+        }
     }
     // Compute and print the average time per frame
     float average_time = total_time / eSRRFParams->nFrames;
@@ -388,13 +396,6 @@ void load_tiff_and_process(const char *input_filename, const char *output_filena
     // Clean up CUDA events
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
-
-    if (!sr_image) {
-        fprintf(stderr, "Error: Memory allocation failed for rgc_maps\n");
-        return;
-    }
-
-    pushImage(stack, sr_image);
 
     // Save the image (we're saving the original image for testing)
     saveAsTiff16(output_filename, stack);
@@ -516,8 +517,8 @@ int main(int argc, char *argv[]) {
         .temporalType = atoi(argv[10])
     };
     // test_image_stack();
-    // load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
+    load_tiff_and_process(argv[1], argv[2], &eSRRFParams);
     // compare_tiff_image_stacks(argv[2], argv[3]);
-    testPerformanceOverSizes(&eSRRFParams);
+    // testPerformanceOverSizes(&eSRRFParams);
     return 0;
 }

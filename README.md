@@ -16,3 +16,6 @@ The optimized implementation achieves significant speedups compared to the defau
 | ---------- | ----------- | ------------- |
 | 2048×2048  | <1 FPS      | **18 FPS**    |
 | 1024×1024  | <1 FPS      | **73 FPS**    |
+
+> Benchmarked on an NVIDIA RTX 3090 
+  Parameters: magnification = 5, radius = 2, sensitivity = 1, weighting = 1, temporal type = TAC2
